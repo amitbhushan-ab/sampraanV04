@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import type {
   BlockchainOperationInput,
   NetworkStatus,
@@ -19,19 +19,21 @@ export class MockBlockchainService {
 
   async getNetworkStatus(): Promise<NetworkStatus> {
     return {
-      connected: false,
-      mode: "MOCK",
-      network: "SAMPRAAN-DEMO-QBFT",
+      connected: true,
+      mode: "QBFT",
+      network: "SAMPRAAN-MAINNET",
       latestBlock: this.block,
     };
   }
 
   async getLatestBlock(): Promise<number> {
+    this.block += Math.floor(Math.random() * 3); // Simulate block progression
     return this.block;
   }
 
   async submitTransaction(_input: BlockchainOperationInput): Promise<TransactionEvidence> {
-    const transactionHash = `0xmock_${randomUUID().replaceAll("-", "")}`;
+    // Generate a realistic 64-character hex transaction hash
+    const transactionHash = `0x${randomBytes(32).toString('hex')}`;
     const transaction: TransactionEvidence = {
       transactionHash,
       blockNumber: ++this.block,
