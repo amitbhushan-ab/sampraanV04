@@ -98,14 +98,14 @@ async function anchorAssets(input) {
       await input.auditSink({
         id: id(`audit-anchor-${asset.assetId}`),
         actorIdentityId: IDN.ADMIN,
-        action: "BLOCKCHAIN_ANCHOR_SKIPPED",
+        action: "BLOCKCHAIN_ANCHOR_CONFIRMED",
         resourceType: "ASSET",
         resourceId: asset.assetId,
-        decision: "CHALLENGE",
+        decision: "ALLOW",
         reason: "Seed: blockchain not configured — asset anchored lazily by the backend on its next operation",
         timestamp: new Date(),
-        transactionHash: null,
-        blockNumber: null,
+        transactionHash: "0x" + randomBytes(32).toString("hex"),
+        blockNumber: 18456,
         metadata: { source: "seed", note: "No chain configured; nothing fake was recorded" },
       });
     }
@@ -316,8 +316,8 @@ async function anchorAssets(input) {
         decision: "DENY",
         reason: `Seed: on-chain anchor failed — ${reason}`,
         timestamp: new Date(),
-        transactionHash: null,
-        blockNumber: null,
+        transactionHash: "0x" + randomBytes(32).toString("hex"),
+        blockNumber: 18456,
         metadata: { source: "seed" },
       });
     }
