@@ -76,4 +76,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # Fail-closed startup: validateSecurityEnv refuses to boot without a strong
 # JWT_SECRET, a bound VITE_APP_ID and a DATABASE_URL in production, and the
 # port binding refuses to hop to a different port.
-CMD ["node", "dist/index.js"]
+CMD ["sh", "-c", "node dist/migrate.js && node dist/index.js"]

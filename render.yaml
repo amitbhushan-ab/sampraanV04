@@ -19,9 +19,6 @@ services:
     plan: free
     healthCheckPath: /ready
     autoDeploy: true
-    # Migrations run in the release step so a failed migration fails the deploy
-    # instead of leaving the app serving against an out-of-date schema.
-    preDeployCommand: node dist/migrate.js
     envVars:
       - key: NODE_ENV
         value: production
