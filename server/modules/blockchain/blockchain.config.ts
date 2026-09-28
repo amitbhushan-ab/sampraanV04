@@ -1,0 +1,143 @@
+/**
+ * Blockchain adapter configuration.
+ *
+ * Environment-driven, explicit, and fail-safe: when Besu configuration is
+ * incomplete the adapter factory falls back to MOCK mode and every real-chain
+ * operation throws a clear configuration error instead of silently pretending
+ * a real blockchain exists.
+ */
+import { readFileSync, existsSync } from "node:fs";
+import path from "node:path";
+import { resolveProjectRoot } from "./paths";
+
+export interface BlockchainConfig {
+  mode: "BESU" | "MOCK";
+  rpcUrl: string;
+  chainId: number;
+  privateKey: string | null;
+  identityContractAddress: string | null;
+  assetContractAddress: string | null;
+  accessControlContractAddress: string | null;
+  /** Governance multisig (2-of-N + timelock). Optional: features that need it fail clearly when absent. */
+  governanceContractAddress: string | null;
+  /**
+   * Optional SECOND governance signer key (e.g. the auditor fixture). When
+   * present the backend can complete the 2-of-N propose→approve→execute
+   * cycle end-to-end; when absent only propose/execute-by-others work.
+   * DEV fixture only — production governance signers must NEVER live in env.
+   */
+  secondSignerPrivateKey: string | null;
+}
+
+export interface DeploymentRecord {
+  network: string;
+  chainId: number;
+  rpcUrl: string;
+  contracts: {
+    SampraanAccessControl: string;
+    SampraanIdentityRegistry: string;
+    SampraanAssetRegistry: string;
+    SampraanGovernance?: string;
+  };
+  governance?: {
+    quorumPercent: number;
+    timelockDelaySeconds: number;
+    note?: string;
+  };
+}
+
+const deploymentFile = (): string =>
+  path.join(resolveProjectRoot(), "blockchain", "deployment.json");
+
+/**
+ * DEMO FIXTURE (documented, non-secret): the well-known Besu genesis key used
+ * as the auditor/governance second signer when BLOCKCHAIN_AUDITOR_PRIVATE_KEY
+ * is not configured. Mirrors scripts/deploy-contracts.ts so the backend can
+ * drive the full 2-of-N propose→approve→execute cycle in the demo. NEVER use
+ * in production — real governance signer keys must live outside env/files.
+ */
+const DEMO_LOCAL_AUDITOR_KEY = "0xc87509a1c067bbde78beb793e6fa76530b6382a4c0241e5e4a9ec0a0f44dc0d3";
+
+function readDeployment(): DeploymentRecord | null {
+  try {
+    const file = deploymentFile();
+    if (!existsSync(file)) return null;
+    return JSON.parse(readFileSync(file, "utf8")) as DeploymentRecord;
+  } catch {
+    return null;
+  }
+}
+
+function isConfigured(address: string | undefined | null): address is string {
+  return typeof address === "string" && /^0x[0-9a-fA-F]{40}$/.test(address);
+}
+
+function isPrivateKey(value: string | undefined | null): value is string {
+  if (!(typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value))) return false;
+  // AUDIT FIX (zero-key refusal): the all-zero key passes the hex shape but
+  // corresponds to no real account — treating it as "BESU ready" produced a
+  // signer that could never fund or send a transaction (and made the mode
+  // report healthy while every submission would revert). Degrade to MOCK so
+  // the status surfaces the real problem instead of failing mid-mint.
+  if (/^0x0{64}$/.test(value)) return false;
+  return true;
+}
+
+/**
+ * Resolve blockchain configuration from the environment, then from the last
+ * deterministic deployment record (blockchain/deployment.json written by
+ * pnpm run blockchain:deploy). BESU mode is only enabled when ALL required
+ * values are present; anything missing degrades to MOCK with the reason
+ * reported through NetworkStatus.error.
+ */
+export function resolveBlockchainConfig(): BlockchainConfig {
+  const deployment = readDeployment();
+
+  const rpcUrl = process.env.BLOCKCHAIN_RPC_URL ?? deployment?.rpcUrl ?? "http://localhost:8545";
+  const chainId = Number(
+    process.env.BLOCKCHAIN_CHAIN_ID ?? deployment?.chainId ?? 4224
+  );
+  const privateKey = isPrivateKey(process.env.BLOCKCHAIN_PRIVATE_KEY)
+    ? process.env.BLOCKCHAIN_PRIVATE_KEY
+    : null;
+  const identityContractAddress =
+    process.env.BLOCKCHAIN_IDENTITY_CONTRACT_ADDRESS ??
+    deployment?.contracts.SampraanIdentityRegistry ??
+    null;
+  const assetContractAddress =
+    process.env.BLOCKCHAIN_ASSET_CONTRACT_ADDRESS ??
+    deployment?.contracts.SampraanAssetRegistry ??
+    null;
+  const accessControlContractAddress =
+    process.env.BLOCKCHAIN_ACCESS_CONTROL_CONTRACT_ADDRESS ??
+    deployment?.contracts.SampraanAccessControl ??
+    null;
+  const governanceContractAddress =
+    process.env.BLOCKCHAIN_GOVERNANCE_CONTRACT_ADDRESS ??
+    deployment?.contracts.SampraanGovernance ??
+    null;
+  const secondSignerPrivateKey =
+    isPrivateKey(process.env.BLOCKCHAIN_AUDITOR_PRIVATE_KEY)
+      ? process.env.BLOCKCHAIN_AUDITOR_PRIVATE_KEY
+      : process.env.SAMPRAAN_DEMO_MODE === "off"
+        ? null
+        : DEMO_LOCAL_AUDITOR_KEY;
+
+  const besuReady =
+    isPrivateKey(privateKey) &&
+    isConfigured(identityContractAddress) &&
+    isConfigured(assetContractAddress) &&
+    isConfigured(accessControlContractAddress);
+
+  return {
+    mode: besuReady ? "BESU" : "MOCK",
+    rpcUrl,
+    chainId,
+    privateKey,
+    identityContractAddress,
+    assetContractAddress,
+    accessControlContractAddress,
+    governanceContractAddress,
+    secondSignerPrivateKey,
+  };
+}
