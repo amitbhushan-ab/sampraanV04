@@ -20,7 +20,7 @@ export class MockBlockchainService {
   async getNetworkStatus(): Promise<NetworkStatus> {
     return {
       connected: true,
-      mode: "QBFT",
+      mode: "BESU",
       network: "SAMPRAAN-MAINNET",
       latestBlock: this.block,
     };

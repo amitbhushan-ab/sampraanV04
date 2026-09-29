@@ -249,7 +249,7 @@ export const appRouter = router({
         );
         const challenge = await createStepUpChallenge(actorIdentity.id, purpose);
         if (!("nonce" in challenge)) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: challenge.reason });
-        await createAuditEvent({ actorIdentityId: actorIdentity.id, action: "STEP_UP_CHALLENGE_ISSUED", resourceType: "ASSET", resourceId: asset.assetId, decision: "CHALLENGE", reason: `Step-up challenge issued for ${purpose}`, metadata: { source: "step-up", nonceFingerprint: fingerprintNonce(challenge.nonce), purpose, keyIdentifier: challenge.keyIdentifier } }).catch(() => undefined);
+        await createAuditEvent({ actorIdentityId: actorIdentity.id, action: "STEP_UP_CHALLENGE_ISSUED", resourceType: "ASSET", resourceId: asset!.assetId, decision: "CHALLENGE", reason: `Step-up challenge issued for ${purpose}`, metadata: { source: "step-up", nonceFingerprint: fingerprintNonce(challenge.nonce), purpose, keyIdentifier: challenge.keyIdentifier } }).catch(() => undefined);
         return challenge;
       }),
     verify: protectedProcedure
@@ -269,11 +269,11 @@ export const appRouter = router({
         );
         const result = await verifyStepUpChallenge({ identityId: actorIdentity.id, purpose, nonce: input.nonce, signature: input.signature, operatorKey });
         if (!result.ok) {
-          await createAuditEvent({ actorIdentityId: actorIdentity.id, action: "STEP_UP_FAILED", resourceType: "ASSET", resourceId: asset.assetId, decision: "DENY", reason: result.reason, metadata: { source: "step-up", code: result.code } }).catch(() => undefined);
+          await createAuditEvent({ actorIdentityId: actorIdentity.id, action: "STEP_UP_FAILED", resourceType: "ASSET", resourceId: asset!.assetId, decision: "DENY", reason: result.reason, metadata: { source: "step-up", code: result.code } }).catch(() => undefined);
           scheduleIntelligenceScan();
           throw new TRPCError({ code: "UNAUTHORIZED", message: result.reason });
         }
-        await createAuditEvent({ actorIdentityId: actorIdentity.id, action: "STEP_UP_SUCCEEDED", resourceType: "ASSET", resourceId: asset.assetId, decision: "ALLOW", reason: "Step-up signature verified server-side", metadata: { source: "step-up", purpose } }).catch(() => undefined);
+        await createAuditEvent({ actorIdentityId: actorIdentity.id, action: "STEP_UP_SUCCEEDED", resourceType: "ASSET", resourceId: asset!.assetId, decision: "ALLOW", reason: "Step-up signature verified server-side", metadata: { source: "step-up", purpose } }).catch(() => undefined);
         return { ok: true as const, purpose, validForMs: 10 * 60 * 1000 };
       }),
   }),
@@ -723,7 +723,7 @@ export const appRouter = router({
               actorIdentityId: null,
               action: "BLOCKCHAIN_TRANSACTION_FAILED",
               resourceType: "ASSET",
-              resourceId: asset.assetId,
+              resourceId: asset!.assetId,
               decision: "DENY",
               reason: `Post-mint on-chain activation failed: ${activation.error}`,
               metadata: { source: "asset-administration", phase: "post-mint-activation" },
@@ -737,7 +737,7 @@ export const appRouter = router({
         actorIdentityId: actingAdminIdentity?.id ?? null,
         action: "ASSET_CREATED",
         resourceType: "ASSET",
-        resourceId: asset.assetId,
+        resourceId: asset!.assetId,
         decision: "ALLOW",
         reason: `Asset ${asset.name} registered (${asset.classification})`,
         transactionHash: anchor.outcome === "ANCHORED" ? anchor.transactionHash ?? null : null,
@@ -792,7 +792,7 @@ export const appRouter = router({
         const operatorKey = besuBlockchainService?.config.privateKey ?? null;
         // MOCK MODE SIMULATION ALLOWED
           
-        }
+
         // The recipient's on-chain reference wallet must be registered and
         // ACTIVE on-chain before assignAsset can succeed (RecipientNotActive).
         await anchoringService.anchorIdentity({ did: custodian.did, displayName: custodian.displayName });
@@ -809,7 +809,7 @@ export const appRouter = router({
             actorIdentityId: actingAdminIdentity?.id ?? null,
             action: "BLOCKCHAIN_TRANSACTION_FAILED",
             resourceType: "ASSET",
-            resourceId: asset.assetId,
+            resourceId: asset!.assetId,
             decision: "DENY",
             reason: `Assignment rejected by the chain: ${reason}`,
             metadata: { source: "blockchain-evidence", ...actingUser },
@@ -831,7 +831,7 @@ export const appRouter = router({
           actorIdentityId: actingAdminIdentity?.id ?? null,
           action: "ASSET_ASSIGNED",
           resourceType: "ASSET",
-          resourceId: asset.assetId,
+          resourceId: asset!.assetId,
           decision: "ALLOW",
           reason: `Custody assigned to ${custodian.displayName} (${custodian.did})`,
           transactionHash: transaction.transactionHash,
@@ -885,7 +885,7 @@ export const appRouter = router({
         actorIdentityId: actingAdminIdentity?.id ?? null,
         action: input.status === "ACTIVE" ? "ASSET_ACTIVATED" : input.status === "REVOKED" ? "ASSET_REVOKED" : "ASSET_SUSPENDED",
         resourceType: "ASSET",
-        resourceId: asset.assetId,
+        resourceId: asset!.assetId,
         decision: "ALLOW",
         reason: `Asset status set to ${input.status} by an administrator`,
         transactionHash: anchor?.outcome === "ANCHORED" ? anchor.reason ?? null : null,
@@ -947,7 +947,7 @@ export const appRouter = router({
         };
         // The denial is evidence: persist the audit event with the actor
         // attribution (never the resource owner) before returning.
-        await createAuditEvent({ actorIdentityId: actorIdentity?.id ?? null, action: "AUTHORIZATION_DENIED", resourceType: "ASSET", resourceId: asset.assetId, decision: "DENY", reason, metadata: { source: "authorization-engine", policyId: null, actorOpenId: ctx.user.openId, actorUserRole: ctx.user.role, actorUserOpenId: ctx.user.openId, ownerStatus } });
+        await createAuditEvent({ actorIdentityId: actorIdentity?.id ?? null, action: "AUTHORIZATION_DENIED", resourceType: "ASSET", resourceId: asset!.assetId, decision: "DENY", reason, metadata: { source: "authorization-engine", policyId: null, actorOpenId: ctx.user.openId, actorUserRole: ctx.user.role, actorUserOpenId: ctx.user.openId, ownerStatus } });
         return { ...decision, transaction: null };
       }
       // SECURITY (audit fix — recipient status): a NAMED recipient is resolved
@@ -965,7 +965,7 @@ export const appRouter = router({
           policyId: undefined,
           timestamp: new Date().toISOString(),
         };
-        await createAuditEvent({ actorIdentityId: actorIdentity?.id ?? null, action: "AUTHORIZATION_DENIED", resourceType: "ASSET", resourceId: asset.assetId, decision: "DENY", reason, metadata: { source: "authorization-engine", policyId: null, actorOpenId: ctx.user.openId, actorUserRole: ctx.user.role, actorUserOpenId: ctx.user.openId, recipientStatus: recipient.status } });
+        await createAuditEvent({ actorIdentityId: actorIdentity?.id ?? null, action: "AUTHORIZATION_DENIED", resourceType: "ASSET", resourceId: asset!.assetId, decision: "DENY", reason, metadata: { source: "authorization-engine", policyId: null, actorOpenId: ctx.user.openId, actorUserRole: ctx.user.role, actorUserOpenId: ctx.user.openId, recipientStatus: recipient.status } });
         scheduleIntelligenceScan();
         return { ...decision, transaction: null };
       }
@@ -1043,7 +1043,7 @@ export const appRouter = router({
           id: result.decisionId,
           actorIdentityId: actorIdentity.id,
           resourceType: "ASSET",
-          resourceId: asset.assetId,
+          resourceId: asset!.assetId,
           action: "TRANSFER",
           decision: result.decision,
           reason: result.reason,
@@ -1061,7 +1061,7 @@ export const appRouter = router({
           actorIdentityId: actorIdentity?.id ?? null,
           action: auditAction,
           resourceType: "ASSET",
-          resourceId: asset.assetId,
+          resourceId: asset!.assetId,
           decision: result.decision,
           reason: result.reason,
           metadata: auditMetadata,
@@ -1090,7 +1090,7 @@ export const appRouter = router({
           actorIdentityId: actorIdentity?.id ?? null,
           action: "BLOCKCHAIN_TRANSACTION_FAILED",
           resourceType: "ASSET",
-          resourceId: asset.assetId,
+          resourceId: asset!.assetId,
           decision: "DENY",
           reason,
           metadata: { source: "blockchain-evidence", chainMode: blockchainService.mode, ...actingUser },
@@ -1134,7 +1134,7 @@ export const appRouter = router({
           actorIdentityId: actorIdentity?.id ?? null,
           action: "BLOCKCHAIN_TRANSACTION_FAILED",
           resourceType: "ASSET",
-          resourceId: asset.assetId,
+          resourceId: asset!.assetId,
           decision: "DENY",
           reason: "Blockchain custodian wallet is not configured",
           metadata: { source: "blockchain-evidence", ...actingUser },
@@ -1158,7 +1158,7 @@ export const appRouter = router({
             actorIdentityId: actorIdentity?.id ?? null,
             action: "ASSET_CUSTODY_UNCHANGED",
             resourceType: "ASSET",
-            resourceId: asset.assetId,
+            resourceId: asset!.assetId,
             decision: "ALLOW",
             reason: "Requested custodian already holds custody on-chain",
             metadata: { source: "blockchain-evidence", custodianWallet: toCustodianWallet, chainMode: blockchainService.mode, ...actingUser },
@@ -1190,7 +1190,7 @@ export const appRouter = router({
             actorIdentityId: actorIdentity?.id ?? null,
             action: "ASSET_CUSTODY_UNCHANGED",
             resourceType: "ASSET",
-            resourceId: asset.assetId,
+            resourceId: asset!.assetId,
             decision: "ALLOW",
             reason: "Requested custodian already holds custody on-chain",
             metadata: { source: "blockchain-evidence", custodianWallet: toCustodianWallet, ...actingUser },
@@ -1206,7 +1206,7 @@ export const appRouter = router({
           actorIdentityId: actorIdentity?.id ?? null,
           action: "BLOCKCHAIN_TRANSACTION_FAILED",
           resourceType: "ASSET",
-          resourceId: asset.assetId,
+          resourceId: asset!.assetId,
           decision: "DENY",
           reason,
           metadata: { source: "blockchain-evidence", ...actingUser },
@@ -1220,7 +1220,7 @@ export const appRouter = router({
         actorIdentityId: actorIdentity?.id ?? null,
         action: "ASSET_TRANSFERRED",
         resourceType: "ASSET",
-        resourceId: asset.assetId,
+        resourceId: asset!.assetId,
         decision: "ALLOW",
         reason: "Custody transfer confirmed on-chain",
         transactionHash: transaction.transactionHash,
@@ -1256,7 +1256,7 @@ export const appRouter = router({
           actorIdentityId: actorIdentity?.id ?? null,
           action: "CUSTODY_SYNC_FAILED",
           resourceType: "ASSET",
-          resourceId: asset.assetId,
+          resourceId: asset!.assetId,
           decision: "CHALLENGE",
           reason: "On-chain transfer confirmed but the database custodian could not be updated",
           transactionHash: transaction.transactionHash,
@@ -1360,7 +1360,7 @@ export const appRouter = router({
             id: result.decisionId,
             actorIdentityId: actorIdentity.id,
             resourceType: "ASSET",
-            resourceId: asset.assetId,
+            resourceId: asset!.assetId,
             action: "TRANSFER_DRY_RUN",
             decision: result.decision,
             reason: result.reason,
@@ -1372,7 +1372,7 @@ export const appRouter = router({
           actorIdentityId: actorIdentity?.id ?? null,
           action: "AUTHORIZATION_DRY_RUN",
           resourceType: "ASSET",
-          resourceId: asset.assetId,
+          resourceId: asset!.assetId,
           decision: result.decision,
           reason: result.reason,
           metadata: { source: "authorization-engine", dryRun: true, policyId: result.policyId ?? null, ownerStatus, ...actingUser },
@@ -1434,7 +1434,7 @@ export const appRouter = router({
           reason: input.reason ?? null,
         });
         if (!approval) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Approval could not be persisted" });
-        await createAuditEvent({ actorIdentityId: actorIdentity.id, action: "APPROVAL_REQUESTED", resourceType: "ASSET", resourceId: asset.assetId, decision: "CHALLENGE", reason: `Approval requested for ${input.action} of ${asset.classification} asset`, metadata: { source: "approval-workflow", approvalId: approval.id } }).catch(() => undefined);
+        await createAuditEvent({ actorIdentityId: actorIdentity.id, action: "APPROVAL_REQUESTED", resourceType: "ASSET", resourceId: asset!.assetId, decision: "CHALLENGE", reason: `Approval requested for ${input.action} of ${asset.classification} asset`, metadata: { source: "approval-workflow", approvalId: approval.id } }).catch(() => undefined);
         return approval;
       }),
     /** Approve/reject — ADMIN (or approval-holder role per policy) only. */
