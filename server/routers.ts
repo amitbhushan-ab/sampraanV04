@@ -1,3 +1,5 @@
+import { randomUUID } from "crypto";
+import { securityAlerts } from "../drizzle/schema";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME, SESSION_TTL_MS } from "@shared/const";
@@ -20,7 +22,7 @@ import {
   applyIdentityRoles,
   applyIdentityStatusChange,
   createAsset,
-  createAuditEvent,
+  createAuditEvent, getDb,
   createAuthorizationDecision,
   createDidRecord,
   createIdentity,
@@ -97,14 +99,14 @@ const did = z
 
 export const appRouter = router({
   breach: publicProcedure.mutation(async () => {
-    const { randomBytes, randomUUID } = require('crypto');
-    const { getDb } = require('./db'); const db = await getDb();
-    const { auditEvents, securityAlerts } = require('../drizzle/schema');
-    const { createAuditEvent } = require('./db');
+    const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB" });
+    
+    
+    
     
     // Create an alert
     await db.insert(securityAlerts).values({
-      id: "alert-" + randomUUID(),
+      id: randomUUID(),
       title: "LATERAL MOVEMENT BLOCKED",
       description: "Multiple unauthorized access attempts detected from compromised session.",
       severity: "CRITICAL",
