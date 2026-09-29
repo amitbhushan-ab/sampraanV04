@@ -64,7 +64,21 @@ function Chakra({ className = "utility-chakra" }: { className?: string }) { retu
 
 /* ---------- Shared tricolor + utility bar + government header ---------- */
 function UtilityBar() {
-  return <><div className="tricolor" aria-hidden="true" /><div className="utility-bar"><span className="utility-chakra-wrap" aria-hidden="true"><Chakra className="utility-chakra" /></span><div className="utility-inner">
+  useEffect(() => {
+    if (!document.getElementById('google-translate-script')) {
+      (window as any).googleTranslateElementInit = () => {
+        if ((window as any).google && (window as any).google.translate) {
+          new (window as any).google.translate.TranslateElement({ pageLanguage: 'en', includedLanguages: 'en,hi,bn,te,mr,ta,ur,gu,kn,ml,pa', layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE }, 'google_translate_element');
+        }
+      };
+      const script = document.createElement('script');
+      script.id = 'google-translate-script';
+      script.src = '//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+      document.body.appendChild(script);
+    }
+  }, []);
+  return <><div className="tricolor" aria-hidden="true" /><div className="utility-bar" style={{ overflow: "visible" }}><span className="utility-chakra-wrap" aria-hidden="true"><Chakra className="utility-chakra" /></span><div className="utility-inner" style={{ overflow: "visible", zIndex: 9999 }}>
+
     <span>भारत सरकार</span><span className="utility-sep utility-hide-m" aria-hidden="true" />
     <span className="utility-hide-m">Bharat Electronics Limited (BEL)</span>
     <div className="utility-right">
