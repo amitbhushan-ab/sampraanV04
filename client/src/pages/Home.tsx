@@ -68,7 +68,7 @@ function UtilityBar() {
     <span>भारत सरकार</span><span className="utility-sep utility-hide-m" aria-hidden="true" />
     <span className="utility-hide-m">Bharat Electronics Limited (BEL)</span>
     <div className="utility-right">
-      <Accessibility size={13} aria-hidden="true" />
+      <div id="google_translate_element" style={{ display: "inline-block", marginRight: "10px", marginTop: "2px", transform: "scale(0.8)", transformOrigin: "right center" }}></div><Accessibility size={13} aria-hidden="true" />
       <div className="utility-a11y utility-hide-m" aria-label="Text size">
         <button type="button" onClick={() => { document.documentElement.style.fontSize = "14px"; }}>A-</button>
         <button type="button" onClick={() => { document.documentElement.style.fontSize = "16px"; }}>A</button>
