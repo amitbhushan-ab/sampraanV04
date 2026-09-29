@@ -64,25 +64,11 @@ function Chakra({ className = "utility-chakra" }: { className?: string }) { retu
 
 /* ---------- Shared tricolor + utility bar + government header ---------- */
 function UtilityBar() {
-  useEffect(() => {
-    if (!document.getElementById('google-translate-script')) {
-      (window as any).googleTranslateElementInit = () => {
-        if ((window as any).google && (window as any).google.translate) {
-          new (window as any).google.translate.TranslateElement({ pageLanguage: 'en', includedLanguages: 'en,hi,bn,te,mr,ta,ur,gu,kn,ml,pa', layout: (window as any).google.translate.TranslateElement.InlineLayout.SIMPLE }, 'google_translate_element');
-        }
-      };
-      const script = document.createElement('script');
-      script.id = 'google-translate-script';
-      script.src = '//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
-      document.body.appendChild(script);
-    }
-  }, []);
-  return <><div className="tricolor" aria-hidden="true" /><div className="utility-bar" style={{ overflow: "visible" }}><span className="utility-chakra-wrap" aria-hidden="true"><Chakra className="utility-chakra" /></span><div className="utility-inner" style={{ overflow: "visible", zIndex: 9999 }}>
-
+  return <><div className="tricolor" aria-hidden="true" /><div className="utility-bar"><span className="utility-chakra-wrap" aria-hidden="true"><Chakra className="utility-chakra" /></span><div className="utility-inner">
     <span>भारत सरकार</span><span className="utility-sep utility-hide-m" aria-hidden="true" />
     <span className="utility-hide-m">Bharat Electronics Limited (BEL)</span>
     <div className="utility-right">
-      <div id="google_translate_element" style={{ display: "inline-block", marginRight: "10px", marginTop: "2px", transform: "scale(0.8)", transformOrigin: "right center" }}></div><Accessibility size={13} aria-hidden="true" />
+      <Accessibility size={13} aria-hidden="true" />
       <div className="utility-a11y utility-hide-m" aria-label="Text size">
         <button type="button" onClick={() => { document.documentElement.style.fontSize = "14px"; }}>A-</button>
         <button type="button" onClick={() => { document.documentElement.style.fontSize = "16px"; }}>A</button>
