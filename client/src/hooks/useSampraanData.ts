@@ -26,8 +26,8 @@ import { useAuth } from "@/_core/hooks/useAuth";
 /** True when this client build runs in development mode (Vite dev server). */
 const isDevBuild = import.meta.env.DEV;
 
-const REFETCH_MS = 30_000;
-const STALE_MS = 15_000;
+const REFETCH_MS = 3000;
+const STALE_MS = 1500;
 
 /**
  * Shared shape for every domain hook. `source` lets surfaces distinguish
