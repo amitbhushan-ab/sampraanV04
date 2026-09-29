@@ -98,7 +98,7 @@ const did = z
 export const appRouter = router({
   breach: publicProcedure.mutation(async () => {
     const { randomBytes, randomUUID } = require('crypto');
-    const db = require('./db').db;
+    const { getDb } = require('./db'); const db = await getDb();
     const { auditEvents, securityAlerts } = require('../drizzle/schema');
     const { createAuditEvent } = require('./db');
     
