@@ -110,7 +110,7 @@ export const appRouter = router({
       severity: "CRITICAL",
       status: "OPEN",
       riskScore: 99,
-      createdAt: new Date(),
+      
       
     });
     
