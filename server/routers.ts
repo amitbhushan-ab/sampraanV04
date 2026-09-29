@@ -99,11 +99,11 @@ export const appRouter = router({
   breach: publicProcedure.mutation(async () => {
     const { randomBytes, randomUUID } = require('crypto');
     const db = require('./db').db;
-    const { audit_events, security_alerts } = require('./db/schema');
+    const { auditEvents, securityAlerts } = require('../drizzle/schema');
     const { createAuditEvent } = require('./db');
     
     // Create an alert
-    await db.insert(security_alerts).values({
+    await db.insert(securityAlerts).values({
       id: "alert-" + randomUUID(),
       title: "LATERAL MOVEMENT BLOCKED",
       description: "Multiple unauthorized access attempts detected from compromised session.",
