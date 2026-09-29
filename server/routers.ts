@@ -96,6 +96,43 @@ const did = z
   .regex(/^did:[a-z][a-z0-9]*:[A-Za-z0-9._\-]+$/, "Invalid DID format (expected did:method:identifier)")
 
 export const appRouter = router({
+  breach: publicProcedure.mutation(async () => {
+    const { randomBytes, randomUUID } = require('crypto');
+    const db = require('./db').db;
+    const { audit_events, security_alerts } = require('./db/schema');
+    const { createAuditEvent } = require('./db');
+    
+    // Create an alert
+    await db.insert(security_alerts).values({
+      id: "alert-" + randomUUID(),
+      title: "LATERAL MOVEMENT BLOCKED",
+      description: "Multiple unauthorized access attempts detected from compromised session.",
+      severity: "CRITICAL",
+      status: "OPEN",
+      riskScore: 99,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    
+    // Insert 10 rapid deny events
+    for (let i = 0; i < 8; i++) {
+      await createAuditEvent({
+        actorIdentityId: null,
+        action: "AUTHORIZATION_DENIED",
+        resourceType: "ASSET",
+        resourceId: "CRITICAL-ASSET-00" + i,
+        decision: "DENY",
+        reason: "Zero-Trust Engine blocked lateral movement attempt (Invalid Session State)",
+        metadata: { source: "breach-simulator", threat: "Lateral Movement" },
+        transactionHash: null,
+        blockNumber: null,
+      });
+      // Sleep slightly to stagger timestamps
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return { success: true };
+  }),
+
   system: systemRouter,
   /**
    * Controlled asset CONTENT (versions, encrypted storage, integrity) —
