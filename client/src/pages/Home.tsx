@@ -68,7 +68,7 @@ function UtilityBar() {
     if (!document.getElementById('google-translate-script')) {
       (window as any).googleTranslateElementInit = () => {
         if ((window as any).google && (window as any).google.translate) {
-          new (window as any).google.translate.TranslateElement({ pageLanguage: 'en', includedLanguages: 'en,hi,bn,te,mr,ta,ur,gu,kn,ml,pa', layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE }, 'google_translate_element');
+          new (window as any).google.translate.TranslateElement({ pageLanguage: 'en', includedLanguages: 'en,hi,bn,te,mr,ta,ur,gu,kn,ml,pa', layout: (window as any).google.translate.TranslateElement.InlineLayout.SIMPLE }, 'google_translate_element');
         }
       };
       const script = document.createElement('script');
