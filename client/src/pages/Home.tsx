@@ -302,7 +302,7 @@ function CommandCenter() {
     })),
     ...feed
   ] : feed;
-  const totals = [summaryLoading ? "…" : data?.identityCount !== undefined ? `${data.identityCount} REGISTERED` : "0 REGISTERED", data?.auditEventCount ? `${data.auditEventCount} DECISIONS` : "0 DECISIONS", data?.assetCount !== undefined ? `${data.assetCount} ASSETS` : "0 ASSETS", data?.auditEventCount !== undefined ? `${data.auditEventCount} EVENTS` : "0 EVENTS", data?.blockchain ? `BLOCK ${data.blockchain.latestBlock.toLocaleString()} / ${data.blockchain.mode}` : "QBFT CONSENSUS", data?.openAlertCount !== undefined ? `${data.openAlertCount} SIGNALS` : "NO SIGNALS"];
+  const totals = [summaryLoading ? "…" : data?.identityCount !== undefined ? `${data.identityCount} REGISTERED` : "0 REGISTERED", data?.auditEventCount ? `${data.auditEventCount} DECISIONS` : "0 DECISIONS", data?.assetCount !== undefined ? `${data.assetCount} ASSETS` : "0 ASSETS", data?.auditEventCount !== undefined ? `${data.auditEventCount} EVENTS` : "0 EVENTS", data?.blockchain ? `BLOCK ${data.blockchain.latestBlock.toLocaleString()} / ${data.blockchain.mode}` : "QBFT CONSENSUS", alertsOpen > 0 ? `${alertsOpen} SIGNALS` : "NO SIGNALS"];
   
   const utils = trpc.useUtils();
   
