@@ -111,7 +111,7 @@ export const appRouter = router({
       status: "OPEN",
       riskScore: 99,
       createdAt: new Date(),
-      updatedAt: new Date(),
+      
     });
     
     // Insert 10 rapid deny events
