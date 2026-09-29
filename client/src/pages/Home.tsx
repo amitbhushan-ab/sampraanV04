@@ -308,16 +308,37 @@ function CommandCenter() {
       "OPERATIONAL": "परिचालन",
       "Digital Assets": "डिजिटल संपत्तियां",
       "Command Center": "कमांड सेंटर",
-      "Access Control": "पहुंच नियंत्रण"
+      "Access Control": "पहुंच नियंत्रण",
+      "Overview": "अवलोकन",
+      "Identity": "पहचान",
+      "Assets": "संपत्ति",
+      "Governance": "शासन",
+      "Audit Evidence": "ऑडिट साक्ष्य",
+      "Intelligence": "बुद्धिमत्ता",
+      "Alerts": "अलर्ट",
+      "Welcome": "स्वागत है",
+      "The current condition of the security fabric across identity, policy, asset, audit, and network layers.": "पहचान, नीति, संपत्ति, ऑडिट और नेटवर्क परतों में सुरक्षा फैब्रिक की वर्तमान स्थिति।",
+      "AUTHENTICATED": "प्रमाणित",
+      "Recent decisions": "हाल के निर्णय",
+      "Recent security events": "हाल की सुरक्षा घटनाएँ",
+      "Controlled resources": "नियंत्रित संसाधन",
+      "SIMULATE CYBERATTACK": "साइबर हमले का अनुकरण करें",
+      "SWITCH TO HINDI": "हिंदी में बदलें"
     };
     const walk = (node: Node) => {
       if (node.nodeType === 3) { // Text node
-        const text = node.nodeValue?.trim();
-        if (text && dict[text]) {
-          node.nodeValue = dict[text];
+        let val = node.nodeValue || "";
+        let changed = false;
+        for (const [en, hi] of Object.entries(dict)) {
+          if (val.includes(en)) {
+            val = val.replace(en, hi);
+            changed = true;
+          }
         }
-      } else {
-        node.childNodes.forEach(walk);
+        if (changed) node.nodeValue = val;
+      } else if (node.nodeType === 1) { // Element node
+        // Convert NodeList to Array to avoid forEach issues on older engines
+        Array.from(node.childNodes).forEach(walk);
       }
     };
     walk(document.body);
