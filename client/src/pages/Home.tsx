@@ -317,31 +317,31 @@ function CommandCenter() {
       "Intelligence": "बुद्धिमत्ता",
       "Alerts": "अलर्ट",
       "Welcome": "स्वागत है",
-      "The current condition of the security fabric across identity, policy, asset, audit, and network layers.": "पहचान, नीति, संपत्ति, ऑडिट और नेटवर्क परतों में सुरक्षा फैब्रिक की वर्तमान स्थिति।",
+      "The current condition of the security fabric across identity, policy, asset, audit, and network layers.": "सुरक्षा फैब्रिक की वर्तमान स्थिति।",
       "AUTHENTICATED": "प्रमाणित",
       "Recent decisions": "हाल के निर्णय",
       "Recent security events": "हाल की सुरक्षा घटनाएँ",
       "Controlled resources": "नियंत्रित संसाधन",
-      "SIMULATE CYBERATTACK": "साइबर हमले का अनुकरण करें",
-      "SWITCH TO HINDI": "हिंदी में बदलें"
+      "SIMULATE CYBERATTACK": "साइबर हमला",
+      "SWITCH TO HINDI": "हिंदी"
     };
-    const walk = (node: Node) => {
-      if (node.nodeType === 3) { // Text node
-        let val = node.nodeValue || "";
-        let changed = false;
-        for (const [en, hi] of Object.entries(dict)) {
-          if (val.includes(en)) {
-            val = val.replace(en, hi);
-            changed = true;
-          }
+
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue) continue;
+      let text = node.nodeValue;
+      let changed = false;
+      for (const [en, hi] of Object.entries(dict)) {
+        if (text.indexOf(en) !== -1) {
+          text = text.split(en).join(hi);
+          changed = true;
         }
-        if (changed) node.nodeValue = val;
-      } else if (node.nodeType === 1) { // Element node
-        // Convert NodeList to Array to avoid forEach issues on older engines
-        Array.from(node.childNodes).forEach(walk);
       }
-    };
-    walk(document.body);
+      if (changed) {
+        node.nodeValue = text;
+      }
+    }
   };
 
   const breachMutation = trpc.breach.useMutation({
