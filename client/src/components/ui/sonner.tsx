@@ -1,8 +1,8 @@
-import { useTheme } from "next-themes";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme();
+  const { theme } = useTheme();
 
   return (
     <Sonner
@@ -10,9 +10,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
+          // Bound to this project's tokens. The stock shadcn names
+          // (--popover, --popover-foreground, --border) are not declared by the
+          // SAMPRAAN theme, so referencing them left every toast unpainted.
+          "--normal-bg": "var(--panel)",
+          "--normal-text": "var(--text)",
+          "--normal-border": "var(--material-hairline-strong)",
         } as React.CSSProperties
       }
       {...props}

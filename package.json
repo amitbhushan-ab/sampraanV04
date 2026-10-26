@@ -22,7 +22,8 @@
     "blockchain:stop": "docker compose -f blockchain/network/docker-compose.yml down",
     "check:env": "node scripts/check-env.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",
-    "health:smoke": "node scripts/smoke-health.mjs"
+    "health:smoke": "node scripts/smoke-health.mjs",
+    "advisory:watch": "node scripts/advisory_watch.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

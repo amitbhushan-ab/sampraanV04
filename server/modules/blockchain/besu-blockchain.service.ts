@@ -34,7 +34,6 @@ import {
 import { resolveBlockchainConfig, type BlockchainConfig } from "./blockchain.config";
 import { deriveIdentityWallet } from "./anchoring.service";
 import {
-  createAccessControlContract,
   createAssetRegistryContract,
   createGovernanceContract,
   createIdentityRegistryContract,
@@ -42,7 +41,6 @@ import {
   getSampraanAssetRegistryABI,
   getSampraanGovernanceABI,
   getSampraanIdentityRegistryABI,
-  type SampraanAccessControlHandle,
   type SampraanAssetRegistryHandle,
   type SampraanGovernanceHandle,
   type SampraanIdentityRegistryHandle,
@@ -93,7 +91,6 @@ export class BesuBlockchainService {
   private signer: NonceManager | null = null;
   private identityContract: SampraanIdentityRegistryHandle | null = null;
   private assetContract: SampraanAssetRegistryHandle | null = null;
-  private accessControlContract: SampraanAccessControlHandle | null = null;
   private governanceContract: SampraanGovernanceHandle | null = null;
   private governanceApprover: SampraanGovernanceHandle | null = null;
   private initPromise: Promise<void> | null = null;
@@ -193,10 +190,11 @@ export class BesuBlockchainService {
       );
     }
 
-    this.accessControlContract = createAccessControlContract(
-      this.requireAddress(this.config.accessControlContractAddress, "access control"),
-      this.signer
-    );
+    // Access-control address is validated here so a misconfigured deployment
+    // fails at init rather than at the first on-chain authorization call. The
+    // handle itself is never used: authorization reads go through the raw ABI
+    // binding below.
+    this.requireAddress(this.config.accessControlContractAddress, "access control");
     this.identityContract = createIdentityRegistryContract(
       this.requireAddress(this.config.identityContractAddress, "identity"),
       this.signer
@@ -788,6 +786,30 @@ export class BesuBlockchainService {
       }
     });
     return { ...evidence!, reportId };
+  }
+
+  /** Anchor external evidence (TinyFish advisory, claim verification, portal audit). */
+  async anchorEvidence(input: {
+    evidenceHash: string;
+    sourceUrl: string;
+    fetchedAt: number;
+    kind: number;
+  }): Promise<TransactionEvidence> {
+    await this.ensureInitialized();
+    let evidence: TransactionEvidence;
+    const formattedHash = input.evidenceHash.startsWith("0x")
+      ? input.evidenceHash
+      : `0x${input.evidenceHash}`;
+    await this.enqueueSubmit(async () => {
+      const tx = await this.assetContract!.anchorEvidence(
+        formattedHash,
+        input.sourceUrl,
+        BigInt(input.fetchedAt),
+        input.kind
+      );
+      evidence = await this.awaitEvidence(tx, "EVIDENCE_ANCHOR");
+    });
+    return evidence!;
   }
 
   /** §13 auditor verification reads (public views on the registry). */

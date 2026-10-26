@@ -28,6 +28,12 @@ export type BlockchainServiceLike = {
   submitTransaction(input: BlockchainOperationInput): Promise<TransactionEvidence>;
   getTransaction(transactionHash: string): Promise<TransactionEvidence | null>;
   getEvents(input?: { fromBlock?: number; toBlock?: number }): Promise<ChainEvent[]>;
+  anchorEvidence(input: {
+    evidenceHash: string;
+    sourceUrl: string;
+    fetchedAt: number;
+    kind: number;
+  }): Promise<TransactionEvidence>;
   /** Signing wallet address when a real chain is configured; null in MOCK mode. */
   readonly operatorAddress: string | null;
   readonly mode: "BESU" | "MOCK";
@@ -65,6 +71,7 @@ function createService(): BlockchainServiceLike {
       submitTransaction: input => besu.submitTransaction(input),
       getTransaction: hash => besu.getTransaction(hash),
       getEvents: input => besu.getEvents(input),
+      anchorEvidence: input => besu.anchorEvidence(input),
     };
   }
   const mock = new MockBlockchainService();
@@ -76,6 +83,7 @@ function createService(): BlockchainServiceLike {
     submitTransaction: input => mock.submitTransaction(input),
     getTransaction: hash => mock.getTransaction(hash),
     getEvents: () => mock.getEvents(),
+    anchorEvidence: input => mock.anchorEvidence(input),
   };
   // Note: the mock chain has no events by construction; the input window is
   // intentionally ignored in MOCK mode (an empty array is the truthful answer).

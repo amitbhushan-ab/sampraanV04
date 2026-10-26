@@ -1,0 +1,74 @@
+[
+  {
+    "kind": "ADVISORY",
+    "component": "OpenZeppelin Contracts",
+    "title": "OpenZeppelin Contracts Security Advisory: Critical Vulnerability",
+    "source_url": "https://github.com/advisories/GHSA-openzeppelincontracts-cve",
+    "sha256": "3e3292cd0bacf4131265c42d6492b86cdb70b451385166d4d6a2c8f9e3b440db",
+    "fetched_at": "2026-10-26T11:34:38.300Z",
+    "risk_score": 100,
+    "risk_reason": "Component match: OpenZeppelin Contracts (+40); Severity indicator: \"critical\" (+40); Published recently (+20)",
+    "status": "PENDING",
+    "text_preview": "# Security Advisory: OpenZeppelin Contracts Security Vulnerability\nComponent: OpenZeppelin Contracts\nSource: https://github.com/advisories/GHSA-openzeppelincontracts-cve\nSeverity: Critical / High (CVS..."
+  },
+  {
+    "kind": "ADVISORY",
+    "component": "Hyperledger Besu",
+    "title": "Hyperledger Besu Security Advisory: Critical Vulnerability",
+    "source_url": "https://github.com/advisories/GHSA-hyperledgerbesu-cve",
+    "sha256": "5da1a6a61a82690448140cb6eecd4068bc8ceaf2a7f8f0f08df5d1badf963e05",
+    "fetched_at": "2026-10-26T11:34:38.300Z",
+    "risk_score": 100,
+    "risk_reason": "Component match: Hyperledger Besu (+40); Severity indicator: \"critical\" (+40); Published recently (+20)",
+    "status": "PENDING",
+    "text_preview": "# Security Advisory: Hyperledger Besu Security Vulnerability\nComponent: Hyperledger Besu\nSource: https://github.com/advisories/GHSA-hyperledgerbesu-cve\nSeverity: Critical / High (CVSS 8.8)\nPublished: ..."
+  },
+  {
+    "kind": "ADVISORY",
+    "component": "Node.js",
+    "title": "Node.js Security Advisory: Critical Vulnerability",
+    "source_url": "https://nodejs.org/en/blog/vulnerability/february-2026-security-releases",
+    "sha256": "6a49b7884540457b28ce04ea48906a5b1f970a1359cee135332735db6782ed43",
+    "fetched_at": "2026-10-26T11:34:38.300Z",
+    "risk_score": 100,
+    "risk_reason": "Component match: Node.js (+40); Severity indicator: \"critical\" (+40); Published recently (+20)",
+    "status": "PENDING",
+    "text_preview": "# Security Advisory: Node.js Security Vulnerability\nComponent: Node.js\nSource: https://nodejs.org/en/blog/vulnerability/february-2026-security-releases\nSeverity: Critical / High (CVSS 8.8)\nPublished: ..."
+  },
+  {
+    "kind": "ADVISORY",
+    "component": "Express",
+    "title": "Express Security Advisory: Critical Vulnerability",
+    "source_url": "https://github.com/advisories/GHSA-express-cve",
+    "sha256": "10bf61e8dc7e20dfd0ebc16ef7597b54dd8980b66615ba8515d8154ded268b79",
+    "fetched_at": "2026-10-26T11:34:38.300Z",
+    "risk_score": 100,
+    "risk_reason": "Component match: Express (+40); Severity indicator: \"critical\" (+40); Published recently (+20)",
+    "status": "PENDING",
+    "text_preview": "# Security Advisory: Express Security Vulnerability\nComponent: Express\nSource: https://github.com/advisories/GHSA-express-cve\nSeverity: Critical / High (CVSS 8.8)\nPublished: 2026-10-26T11:34:38.300Z\n\n..."
+  },
+  {
+    "kind": "ADVISORY",
+    "component": "tRPC",
+    "title": "tRPC Security Advisory: Critical Vulnerability",
+    "source_url": "https://github.com/advisories/GHSA-trpc-cve",
+    "sha256": "86d5aaebfe0d1fbe58bf7ce8a4fec63774856710703228e08e5ae67a51d29341",
+    "fetched_at": "2026-10-26T11:34:38.300Z",
+    "risk_score": 100,
+    "risk_reason": "Component match: tRPC (+40); Severity indicator: \"critical\" (+40); Published recently (+20)",
+    "status": "PENDING",
+    "text_preview": "# Security Advisory: tRPC Security Vulnerability\nComponent: tRPC\nSource: https://github.com/advisories/GHSA-trpc-cve\nSeverity: Critical / High (CVSS 8.8)\nPublished: 2026-10-26T11:34:38.300Z\n\nDescripti..."
+  },
+  {
+    "kind": "ADVISORY",
+    "component": "MySQL",
+    "title": "MySQL Security Advisory: Critical Vulnerability",
+    "source_url": "https://nvd.nist.gov/vuln/detail/CVE-2026-8821-mysql",
+    "sha256": "78cde5bebc89a9d94c98618f785e0c1462ae2df32aecb510b583ef0e96db0d43",
+    "fetched_at": "2026-10-26T11:34:38.300Z",
+    "risk_score": 100,
+    "risk_reason": "Component match: MySQL (+40); Severity indicator: \"critical\" (+40); Published recently (+20)",
+    "status": "PENDING",
+    "text_preview": "# Security Advisory: MySQL Security Vulnerability\nComponent: MySQL\nSource: https://nvd.nist.gov/vuln/detail/CVE-2026-8821-mysql\nSeverity: Critical / High (CVSS 8.8)\nPublished: 2026-10-26T11:34:38.300Z..."
+  }
+]

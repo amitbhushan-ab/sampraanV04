@@ -41,6 +41,7 @@ const INDEXED_ACTIONS: Record<string, string> = {
   DisputeResolved: "DISPUTE_RESOLVED_ON_CHAIN",
   AnomalyFlagged: "ANOMALY_FLAGGED_ON_CHAIN",
   AuditReportHashStored: "AUDIT_REPORT_HASH_STORED_ON_CHAIN",
+  EvidenceAnchored: "EVIDENCE_ANCHORED_ON_CHAIN",
   ProposalCreated: "GOVERNANCE_PROPOSAL_CREATED_ON_CHAIN",
   ProposalApproved: "GOVERNANCE_PROPOSAL_APPROVED_ON_CHAIN",
   ProposalCancelled: "GOVERNANCE_PROPOSAL_CANCELLED_ON_CHAIN",
@@ -66,7 +67,6 @@ export class ChainEventIndexer {
    * dedup set (e.g. a slow insert + fast blocks) would double-project events.
    * A scan only starts when the previous one has fully settled.
    */
-  private scanMutex: Promise<IndexerResult> = Promise.resolve({ indexed: 0, skipped: 0, latestBlock: 0 });
   private indexing = false;
 
   /**
@@ -193,16 +193,20 @@ export class ChainEventIndexer {
 
     const args = event.args as Record<string, unknown>;
     const resourceId =
-      typeof args.assetIdDigest === "string"
-        ? args.assetIdDigest
-        : typeof args.didDigest === "string"
-          ? args.didDigest
-          : event.transactionHash;
+      typeof args.evidenceHash === "string"
+        ? args.evidenceHash
+        : typeof args.assetIdDigest === "string"
+          ? args.assetIdDigest
+          : typeof args.didDigest === "string"
+            ? args.didDigest
+            : event.transactionHash;
+
+    const resourceType = event.name === "EvidenceAnchored" ? "EVIDENCE" : "CHAIN";
 
     return {
       actorIdentityId: null,
       action,
-      resourceType: "CHAIN",
+      resourceType,
       resourceId,
       decision: "ALLOW" as const,
       reason: `On-chain event ${event.name} at block ${event.blockNumber}`,

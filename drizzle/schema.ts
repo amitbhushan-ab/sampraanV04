@@ -626,3 +626,32 @@ export const assetApprovals = mysqlTable("asset_approvals", {
 
 export type AssetApproval = typeof assetApprovals.$inferSelect;
 export type InsertAssetApproval = typeof assetApprovals.$inferInsert;
+
+/**
+ * External evidence records (TinyFish connector & human-in-the-loop anchoring).
+ * Tracks outside sources fetched via TinyFish Search/Fetch/Agent, their SHA-256 digests,
+ * off-chain IPFS references, risk scores, and on-chain anchoring status.
+ */
+export const evidence = mysqlTable("evidence", {
+  id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+  kind: mysqlEnum("kind", ["ADVISORY", "CLAIM", "PORTAL"]).notNull(),
+  component: varchar("component", { length: 255 }).notNull(),
+  sourceUrl: text("source_url").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+  sha256: varchar("sha256", { length: 64 }).notNull(),
+  ipfsCid: varchar("ipfs_cid", { length: 255 }),
+  riskScore: int("risk_score").default(0).notNull(),
+  status: mysqlEnum("status", ["PENDING", "APPROVED", "REJECTED", "ANCHORED"]).default("PENDING").notNull(),
+  approvedBy: varchar("approved_by", { length: 255 }),
+  txHash: varchar("tx_hash", { length: 255 }),
+  rawText: text("raw_text"),
+  createdAt: createdAt(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  statusIdx: index("evidence_status_idx").on(table.status),
+  kindIdx: index("evidence_kind_idx").on(table.kind),
+  shaIdx: index("evidence_sha_idx").on(table.sha256),
+}));
+
+export type Evidence = typeof evidence.$inferSelect;
+export type InsertEvidence = typeof evidence.$inferInsert;

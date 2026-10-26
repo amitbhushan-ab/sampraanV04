@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID, createHash } from "crypto";
 import { securityAlerts } from "../drizzle/schema";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -44,7 +44,12 @@ import {
   listSecurityAlerts,
   revokePlatformSession,
   updateAlertStatus,
+  createEvidenceRecord,
+  listEvidenceRecords,
+  getEvidenceRecordById,
+  updateEvidenceRecordStatus,
 } from "./db";
+import { tinyFishConnector, SAMPRAAN_COMPONENTS } from "./modules/tinyfish/tinyfish.connector";
 import { anchoringService, deriveIdentityWallet } from "./modules/blockchain/anchoring.service";
 import {
   createDidChallenge,
@@ -1588,6 +1593,261 @@ export const appRouter = router({
    * consumes exactly once. See modules/crypto-assurance/.
    */
   assurance: assuranceRouter,
+  /**
+   * TINYFISH EXTERNAL EVIDENCE & ANCHORING (§3, §8, §9)
+   * Connects SAMPRAAN to outside data sources via TinyFish Search/Fetch/Agent.
+   * Human approver gates all on-chain state changes; the Besu chain anchors
+   * the SHA-256 evidence digest while text is stored off-chain.
+   */
+  evidence: router({
+    list: protectedProcedure
+      .input(
+        z.object({
+          status: z.enum(["PENDING", "APPROVED", "REJECTED", "ANCHORED"]).optional(),
+          kind: z.enum(["ADVISORY", "CLAIM", "PORTAL"]).optional(),
+          limit: z.number().min(1).max(200).optional(),
+        }).optional()
+      )
+      .query(async ({ input }) => {
+        return listEvidenceRecords(input);
+      }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const row = await getEvidenceRecordById(input.id);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Evidence record not found" });
+        return row;
+      }),
+
+    status: protectedProcedure.query(async () => {
+      const records = await listEvidenceRecords({ limit: 200 });
+      const pending = records.filter(r => r.status === "PENDING").length;
+      const anchored = records.filter(r => r.status === "ANCHORED").length;
+      const rejected = records.filter(r => r.status === "REJECTED").length;
+      return {
+        total: records.length,
+        pending,
+        anchored,
+        rejected,
+        isTinyFishConfigured: tinyFishConnector.isConfigured,
+      };
+    }),
+
+    runWatch: protectedProcedure
+      .input(
+        z.object({
+          components: z.array(z.string()).optional(),
+        }).optional()
+      )
+      .mutation(async ({ ctx, input }) => {
+        const actorIdentity = await getIdentityByLinkedUserId(ctx.user.id);
+        const targetComponents = input?.components && input.components.length > 0
+          ? input.components
+          : (SAMPRAAN_COMPONENTS as readonly string[]);
+
+        const createdRows = [];
+        for (const comp of targetComponents) {
+          try {
+            const searchResults = await tinyFishConnector.search({
+              query: `${comp} security advisory vulnerability`,
+              purpose: "Find recent security advisories for a component in our platform",
+            });
+
+            if (!searchResults || searchResults.length === 0) continue;
+            const top = searchResults[0];
+            const validate = tinyFishConnector.validateUrl(top.url);
+            if (!validate.valid) continue;
+
+            const fetchRes = await tinyFishConnector.fetchCleanText([top.url]);
+            const text = fetchRes.results[0]?.text;
+            if (!text) continue;
+
+            const evidenceItem = tinyFishConnector.buildEvidenceRecord({
+              kind: "ADVISORY",
+              component: comp,
+              sourceUrl: top.url,
+              text,
+              title: top.title,
+              publishedAt: top.date,
+            });
+
+            const row = await createEvidenceRecord(evidenceItem);
+            createdRows.push(row);
+
+            if (evidenceItem.riskScore >= 60) {
+              const db = await getDb();
+              if (db) {
+                await db.insert(securityAlerts).values({
+                  id: randomUUID(),
+                  title: `TINYFISH ADVISORY: ${comp}`,
+                  severity: evidenceItem.riskScore >= 80 ? "CRITICAL" : "HIGH",
+                  status: "OPEN",
+                  description: `High-risk security advisory found via TinyFish Watch: ${top.title} (Source: ${top.url})`,
+                  riskScore: evidenceItem.riskScore,
+                }).catch(() => undefined);
+              }
+            }
+          } catch (err) {
+            console.warn(`[TinyFish] Advisory watch error for ${comp}: ${String(err)}`);
+          }
+        }
+
+        await createAuditEvent({
+          actorIdentityId: actorIdentity?.id ?? null,
+          action: "TINYFISH_ADVISORY_WATCH_EXECUTED",
+          resourceType: "EVIDENCE",
+          resourceId: `batch-${Date.now()}`,
+          decision: "ALLOW",
+          reason: `Scanned ${targetComponents.length} components; generated ${createdRows.length} evidence records`,
+          metadata: { source: "tinyfish-connector", count: createdRows.length },
+        }).catch(() => undefined);
+
+        return { scanned: targetComponents.length, created: createdRows.length, items: createdRows };
+      }),
+
+    verifyClaim: protectedProcedure
+      .input(
+        z.object({
+          url: z.string().url(),
+          companyName: z.string().min(2),
+          registrationNumber: z.string().min(2),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const actorIdentity = await getIdentityByLinkedUserId(ctx.user.id);
+        const goal = `Search this registry for the company named ${input.companyName} with registration number ${input.registrationNumber}. If found, return the company name, status, certificate number and expiry date as JSON. If not found, return {"found": false}. Do not click any link that leaves this site.`;
+
+        const runRes = await tinyFishConnector.runAgentClaimVerification(input.url, goal);
+        if (runRes.status === "FAILED") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Agent run failed: ${runRes.error ?? "Claim unverified"}` });
+        }
+
+        const extractedData = runRes.result ?? {};
+        const canonicalJson = JSON.stringify(extractedData, Object.keys(extractedData).sort());
+        const sha256 = createHash("sha256").update(canonicalJson, "utf8").digest("hex");
+
+        const row = await createEvidenceRecord({
+          kind: "CLAIM",
+          component: input.companyName,
+          sourceUrl: input.url,
+          sha256,
+          rawText: canonicalJson,
+          riskScore: 20,
+          status: "PENDING",
+        });
+
+        await createAuditEvent({
+          actorIdentityId: actorIdentity?.id ?? null,
+          action: "TINYFISH_CLAIM_VERIFIED",
+          resourceType: "EVIDENCE",
+          resourceId: sha256,
+          decision: "ALLOW",
+          reason: `Claim verification completed for ${input.companyName} (${input.registrationNumber})`,
+          metadata: { source: "tinyfish-agent", evidenceId: row.id, sha256 },
+        }).catch(() => undefined);
+
+        return row;
+      }),
+
+    approveAndAnchor: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          reason: z.string().max(300).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const actorIdentity = await getIdentityByLinkedUserId(ctx.user.id);
+        const { roles, permissions } = actorIdentity
+          ? await getIdentityRolesAndPermissions(actorIdentity.id)
+          : { roles: [] as string[], permissions: [] as string[] };
+        const isAdminOrManager =
+          ctx.user.role === "admin" ||
+          roles.includes("ADMIN") ||
+          roles.includes("APPROVER") ||
+          roles.includes("MANAGER") ||
+          permissions.includes("administration:manage");
+
+        if (!isAdminOrManager) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only an authorized Approver/Administrator can approve and anchor evidence on-chain.",
+          });
+        }
+
+        const evidenceRow = await getEvidenceRecordById(input.id);
+        if (!evidenceRow) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Evidence record not found" });
+        }
+        if (evidenceRow.status === "ANCHORED") {
+          return { evidence: evidenceRow, alreadyAnchored: true };
+        }
+
+        const kindNum = evidenceRow.kind === "ADVISORY" ? 0 : evidenceRow.kind === "CLAIM" ? 1 : 2;
+        const fetchedSec = Math.floor(new Date(evidenceRow.fetchedAt).getTime() / 1000);
+
+        const txEvidence = await blockchainService.anchorEvidence({
+          evidenceHash: evidenceRow.sha256,
+          sourceUrl: evidenceRow.sourceUrl,
+          fetchedAt: fetchedSec,
+          kind: kindNum,
+        });
+
+        const updated = await updateEvidenceRecordStatus(input.id, {
+          status: "ANCHORED",
+          approvedBy: actorIdentity?.did ?? ctx.user.email ?? ctx.user.openId,
+          txHash: txEvidence.transactionHash,
+        });
+
+        await createAuditEvent({
+          actorIdentityId: actorIdentity?.id ?? null,
+          action: "EVIDENCE_ANCHORED_ON_CHAIN",
+          resourceType: "EVIDENCE",
+          resourceId: evidenceRow.sha256,
+          decision: "ALLOW",
+          reason: `Evidence anchored on-chain for ${evidenceRow.component} (${evidenceRow.kind}). ${input.reason ?? ""}`,
+          transactionHash: txEvidence.transactionHash,
+          blockNumber: txEvidence.blockNumber,
+          metadata: {
+            evidenceId: evidenceRow.id,
+            sourceUrl: evidenceRow.sourceUrl,
+            sha256: evidenceRow.sha256,
+            kind: evidenceRow.kind,
+            approvedBy: actorIdentity?.did ?? ctx.user.email,
+          },
+        }).catch(() => undefined);
+
+        return { evidence: updated, transaction: txEvidence };
+      }),
+
+    reject: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          reason: z.string().min(3).max(300),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const actorIdentity = await getIdentityByLinkedUserId(ctx.user.id);
+        const updated = await updateEvidenceRecordStatus(input.id, {
+          status: "REJECTED",
+          approvedBy: actorIdentity?.did ?? ctx.user.email ?? ctx.user.openId,
+        });
+
+        await createAuditEvent({
+          actorIdentityId: actorIdentity?.id ?? null,
+          action: "EVIDENCE_REJECTED",
+          resourceType: "EVIDENCE",
+          resourceId: String(input.id),
+          decision: "DENY",
+          reason: `Evidence rejected: ${input.reason}`,
+          metadata: { evidenceId: input.id, rejectedBy: actorIdentity?.did ?? ctx.user.email },
+        }).catch(() => undefined);
+
+        return updated;
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

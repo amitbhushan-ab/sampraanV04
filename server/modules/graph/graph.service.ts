@@ -63,7 +63,6 @@ export interface GraphProvenance {
   identityEvents: GraphTransfer[]; // empty for assets; kept for query-shape parity
 }
 
-const STATUS_NAMES = ["NONE", "PENDING", "ACTIVE", "SUSPENDED", "REVOKED"] as const;
 const IDENTITY_STATUS_NAMES = ["NONE", "ACTIVE", "SUSPENDED", "REVOKED"] as const;
 
 /**

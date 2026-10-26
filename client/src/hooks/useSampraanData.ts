@@ -42,7 +42,14 @@ export type SampraanQueryResult<T> = {
   source: "live" | "unavailable";
 };
 
-function toResult<T>(query: { data: T | undefined; isLoading: boolean; isFetching: boolean; error: unknown; isError: boolean; isSuccess: boolean }): SampraanQueryResult<T> {
+function toResult<T>(query: {
+  data: T | undefined;
+  isLoading: boolean;
+  isFetching: boolean;
+  error: unknown;
+  isError: boolean;
+  isSuccess: boolean;
+}): SampraanQueryResult<T> {
   // "live" means the active backend query succeeded — the surface should
   // render real rows. A failed or disabled read keeps surfaces on their demo
   // fallback content while the error is surfaced explicitly.
@@ -102,12 +109,15 @@ export function useAssets() {
 /** Audit evidence stream: protected audit.list, demo.audit fallback. */
 export function useAuditEvents() {
   const { isAuthenticated } = useAuth();
-  const live = trpc.audit.list.useQuery({ limit: 200 }, {
-    enabled: isAuthenticated,
-    staleTime: STALE_MS,
-    refetchInterval: REFETCH_MS,
-    retry: false,
-  });
+  const live = trpc.audit.list.useQuery(
+    { limit: 200 },
+    {
+      enabled: isAuthenticated,
+      staleTime: STALE_MS,
+      refetchInterval: REFETCH_MS,
+      retry: false,
+    }
+  );
   const demo = trpc.demo.audit.useQuery(undefined, {
     enabled: !isAuthenticated && isDevBuild,
     staleTime: STALE_MS,

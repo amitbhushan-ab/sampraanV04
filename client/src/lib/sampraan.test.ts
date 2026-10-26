@@ -9,6 +9,7 @@ import {
   formatTimestamp,
   formatTxHash,
   initials,
+  opKindLabel,
   matchesAssetQuery,
   permissionGlyph,
   permissionLabel,
@@ -72,7 +73,9 @@ const asset = (overrides: Partial<Asset> = {}): Asset => ({
   ...overrides,
 });
 
-const securityAlert = (overrides: Partial<SecurityAlert> = {}): SecurityAlert => ({
+const securityAlert = (
+  overrides: Partial<SecurityAlert> = {}
+): SecurityAlert => ({
   id: "alert-1",
   title: "Suspicious Asset Access Pattern",
   severity: "HIGH",
@@ -112,7 +115,9 @@ describe("decision mapping", () => {
 describe("formatting", () => {
   it("formats clock times and full timestamps", () => {
     const date = new Date("2026-09-03T09:42:18Z");
-    expect(formatClock(date)).toBe(date.toLocaleTimeString([], { hour12: false }));
+    expect(formatClock(date)).toBe(
+      date.toLocaleTimeString([], { hour12: false })
+    );
     expect(formatClock(null)).toBe("—");
     expect(formatTimestamp(null)).toBe("—");
   });
@@ -132,9 +137,27 @@ describe("formatting", () => {
   });
 
   it("renders tx cells with and without chain anchors", () => {
-    expect(formatTxHash({ transactionHash: "0x7f3abcdefc921", blockNumber: 18492201 })).toContain("#18,492,201");
-    expect(formatTxHash({ transactionHash: null, blockNumber: null })).toBe("NOT ANCHORED");
-    expect(formatTxHash({ transactionHash: null, blockNumber: 42 })).toBe("BLOCK #42");
+    expect(
+      formatTxHash({
+        transactionHash: "0x7f3abcdefc921",
+        blockNumber: 18492201,
+      })
+    ).toContain("#18,492,201");
+    expect(formatTxHash({ transactionHash: null, blockNumber: null })).toBe(
+      "NOT ANCHORED"
+    );
+    expect(formatTxHash({ transactionHash: null, blockNumber: 42 })).toBe(
+      "BLOCK #42"
+    );
+  });
+
+  it("names the on-chain proposal kinds the contract defines", () => {
+    expect(opKindLabel(1)).toBe("GRANT_ROLE");
+    expect(opKindLabel(3)).toBe("BURN_NFT");
+    expect(opKindLabel(7)).toBe("DEACTIVATE_IDENTITY");
+    expect(opKindLabel(0)).toBe("NONE");
+    expect(opKindLabel(undefined)).toBe("—");
+    expect(opKindLabel(99)).toBe("UNRECOGNISED OPKIND 99");
   });
 });
 
@@ -151,13 +174,19 @@ describe("audit row mapping", () => {
   });
 
   it("marks unattributed actors without crashing", () => {
-    const rows = toAuditRows([auditEvent({ actorIdentityId: null, id: "event-2" })], []);
+    const rows = toAuditRows(
+      [auditEvent({ actorIdentityId: null, id: "event-2" })],
+      []
+    );
     expect(rows[0].actor).toBe("Unattributed actor");
     expect(rows[0].did).toBe("—");
   });
 
   it("feeds the decisions panel from authorization events only", () => {
-    const events = [auditEvent(), auditEvent({ id: "event-3", action: "IDENTITY_CREATED", decision: null })];
+    const events = [
+      auditEvent(),
+      auditEvent({ id: "event-3", action: "IDENTITY_CREATED", decision: null }),
+    ];
     const decisions = toDecisionRows(events, [identity()]);
     expect(decisions).toHaveLength(1);
     expect(decisions[0].action).toBe("DENIED");
@@ -171,13 +200,21 @@ describe("audit row mapping", () => {
   });
 
   it("carries decision evidence (reason, tx, block, source) for structured cards", () => {
-    const rows = toDecisionRows([auditEvent({ transactionHash: "0xabc123def456", blockNumber: 77 })], [identity()]);
-    expect(rows[0].reason).toBe("Role USER cannot TRANSFER HIGHLY_SENSITIVE asset");
+    const rows = toDecisionRows(
+      [auditEvent({ transactionHash: "0xabc123def456", blockNumber: 77 })],
+      [identity()]
+    );
+    expect(rows[0].reason).toBe(
+      "Role USER cannot TRANSFER HIGHLY_SENSITIVE asset"
+    );
     expect(rows[0].actorName).toBe("Aarav Mehta");
     expect(rows[0].fullDid).toBe("did:demo:aarav-mehta");
     expect(rows[0].txHash).toBe("0xabc123def456");
     expect(rows[0].block).toBe(77);
-    const auditRows = toAuditRows([auditEvent({ source: "CHAIN_READ_MODEL" })], [identity()]);
+    const auditRows = toAuditRows(
+      [auditEvent({ source: "CHAIN_READ_MODEL" })],
+      [identity()]
+    );
     expect(auditRows[0].source).toBe("CHAIN_READ_MODEL");
     expect(auditRows[0].reason).toContain("Role USER");
   });
@@ -185,23 +222,59 @@ describe("audit row mapping", () => {
 
 describe("permission matrix", () => {
   it("maps admin permission keys onto full READ/WRITE/ADMIN grants", () => {
-    const matrix = permissionMatrix(["asset:read", "asset:create", "asset:assign", "asset:transfer", "asset:revoke", "identity:read", "identity:create", "identity:update", "identity:revoke", "policy:create", "policy:update", "audit:read", "administration:manage"]);
-    expect(matrix["Assets"]).toMatchObject({ READ: true, WRITE: true, ADMIN: true });
-    expect(matrix["Identities"]).toMatchObject({ READ: true, WRITE: true, ADMIN: true });
+    const matrix = permissionMatrix([
+      "asset:read",
+      "asset:create",
+      "asset:assign",
+      "asset:transfer",
+      "asset:revoke",
+      "identity:read",
+      "identity:create",
+      "identity:update",
+      "identity:revoke",
+      "policy:create",
+      "policy:update",
+      "audit:read",
+      "administration:manage",
+    ]);
+    expect(matrix["Assets"]).toMatchObject({
+      READ: true,
+      WRITE: true,
+      ADMIN: true,
+    });
+    expect(matrix["Identities"]).toMatchObject({
+      READ: true,
+      WRITE: true,
+      ADMIN: true,
+    });
     expect(matrix["Policies"]).toMatchObject({ WRITE: true, READ: false });
     expect(matrix["Administration"]).toMatchObject({ ADMIN: true });
   });
 
   it("gives the auditor read-only surface and nothing more", () => {
-    const matrix = permissionMatrix(["asset:read", "audit:read", "identity:read"]);
-    expect(matrix["Assets"]).toMatchObject({ READ: true, WRITE: false, ADMIN: false });
-    expect(matrix["Policies"]).toMatchObject({ READ: false, WRITE: false, ADMIN: false });
+    const matrix = permissionMatrix([
+      "asset:read",
+      "audit:read",
+      "identity:read",
+    ]);
+    expect(matrix["Assets"]).toMatchObject({
+      READ: true,
+      WRITE: false,
+      ADMIN: false,
+    });
+    expect(matrix["Policies"]).toMatchObject({
+      READ: false,
+      WRITE: false,
+      ADMIN: false,
+    });
     expect(matrix["Administration"]).toMatchObject({ ADMIN: false });
   });
 
   it("never invents grants for unknown permission keys", () => {
     const matrix = permissionMatrix(["totally:unknown:key"]);
-    expect(Object.values(matrix["Assets"]).every(granted => !granted)).toBe(true);
+    expect(Object.values(matrix["Assets"]).every(granted => !granted)).toBe(
+      true
+    );
   });
 
   it("labels known permission keys and falls back to the raw key", () => {
@@ -210,14 +283,18 @@ describe("permission matrix", () => {
   });
 
   it("summarizes access level per role set and never color-codes permission glyphs", () => {
-    expect(accessLevelSummary(["MANAGER"])).toBe("Policy + asset management (custody)");
+    expect(accessLevelSummary(["MANAGER"])).toBe(
+      "Policy + asset management (custody)"
+    );
     expect(accessLevelSummary([])).toContain("No SAMPRAAN identity role");
     expect(permissionGlyph(true)).toBe("✓");
     expect(permissionGlyph(false)).toBe("✕");
   });
 
   it("mid-truncates long technical values keeping both ends", () => {
-    expect(truncateMid("0x1234567890abcdef1234567890abcdef", 8)).toBe("0x123456…90abcdef");
+    expect(truncateMid("0x1234567890abcdef1234567890abcdef", 8)).toBe(
+      "0x123456…90abcdef"
+    );
     expect(truncateMid("short", 8)).toBe("short");
     expect(truncateMid(null, 8)).toBe("—");
   });
@@ -225,7 +302,10 @@ describe("permission matrix", () => {
 
 describe("asset registry mapping", () => {
   it("maps assets with resolved custodians and status tones", () => {
-    const rows = toAssetRows([asset()], [identity({ displayName: "Ananya Rao" })]);
+    const rows = toAssetRows(
+      [asset()],
+      [identity({ displayName: "Ananya Rao" })]
+    );
     expect(rows[0].custodian).toBe("Ananya Rao");
     expect(rows[0].statusTone).toBe("mint");
     expect(rows[0].name).toBe("Restricted Firmware Package");
@@ -239,12 +319,24 @@ describe("asset registry mapping", () => {
   it("buckets the asset mix by type keyword", () => {
     const mix = assetMix([
       asset(),
-      asset({ id: "asset-2", assetId: "TEST-INST-08", type: "INSTRUMENT", name: "Environmental Test Instrument" }),
-      asset({ id: "asset-3", assetId: "KEY-01", type: "KEY MATERIAL", name: "Signing Key Material" }),
+      asset({
+        id: "asset-2",
+        assetId: "TEST-INST-08",
+        type: "INSTRUMENT",
+        name: "Environmental Test Instrument",
+      }),
+      asset({
+        id: "asset-3",
+        assetId: "KEY-01",
+        type: "KEY MATERIAL",
+        name: "Signing Key Material",
+      }),
     ]);
     expect(mix.find(bucket => bucket.label === "FIRMWARE")?.count).toBe(1);
     expect(mix.find(bucket => bucket.label === "INSTRUMENTS")?.count).toBe(1);
-    expect(mix.find(bucket => bucket.label === "CRYPTO MATERIAL")?.count).toBe(1);
+    expect(mix.find(bucket => bucket.label === "CRYPTO MATERIAL")?.count).toBe(
+      1
+    );
     expect(mix.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(3);
   });
 
@@ -262,8 +354,19 @@ describe("alert aggregation", () => {
   it("derives intelligence metrics from the alert registry", () => {
     const metrics = alertMetrics([
       securityAlert(),
-      securityAlert({ id: "alert-2", severity: "MEDIUM", status: "INVESTIGATING", riskScore: 40, identityId: "identity-2" }),
-      securityAlert({ id: "alert-3", severity: "HIGH", status: "RESOLVED", riskScore: 30 }),
+      securityAlert({
+        id: "alert-2",
+        severity: "MEDIUM",
+        status: "INVESTIGATING",
+        riskScore: 40,
+        identityId: "identity-2",
+      }),
+      securityAlert({
+        id: "alert-3",
+        severity: "HIGH",
+        status: "RESOLVED",
+        riskScore: 30,
+      }),
     ]);
     expect(metrics.openCount).toBe(1);
     expect(metrics.investigatingCount).toBe(1);
@@ -273,17 +376,29 @@ describe("alert aggregation", () => {
   });
 
   it("reports a quiet registry safely", () => {
-    expect(alertMetrics([])).toEqual({ openCount: 0, investigatingCount: 0, maxRisk: null, highRiskIdentities: 0, criticalCount: 0 });
+    expect(alertMetrics([])).toEqual({
+      openCount: 0,
+      investigatingCount: 0,
+      maxRisk: null,
+      highRiskIdentities: 0,
+      criticalCount: 0,
+    });
     expect(alertMetrics(undefined).maxRisk).toBeNull();
   });
 
   it("prefers the first open alert as the primary investigation", () => {
     const alerts = [
       securityAlert({ id: "alert-resolved", status: "RESOLVED" }),
-      securityAlert({ id: "alert-open", status: "OPEN", title: "Latest open signal" }),
+      securityAlert({
+        id: "alert-open",
+        status: "OPEN",
+        title: "Latest open signal",
+      }),
     ];
     expect(primaryAlert(alerts)?.id).toBe("alert-open");
     expect(primaryAlert([])).toBeNull();
-    expect(primaryAlert([securityAlert({ status: "RESOLVED" })])?.status).toBe("RESOLVED");
+    expect(primaryAlert([securityAlert({ status: "RESOLVED" })])?.status).toBe(
+      "RESOLVED"
+    );
   });
 });

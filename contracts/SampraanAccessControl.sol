@@ -28,6 +28,7 @@ contract SampraanAccessControl is AccessControl {
     bytes32 public constant IDENTITY_ADMIN_ROLE = keccak256("IDENTITY_ADMIN_ROLE");
     bytes32 public constant ASSET_MANAGER_ROLE = keccak256("ASSET_MANAGER_ROLE");
     bytes32 public constant AUDITOR_ROLE = keccak256("AUDITOR_ROLE");
+    bytes32 public constant APPROVER_ROLE = keccak256("APPROVER_ROLE");
 
     error AuditorRoleNotExclusive();
     error LastAdminProtection();
@@ -39,6 +40,7 @@ contract SampraanAccessControl is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(IDENTITY_ADMIN_ROLE, msg.sender);
         _grantRole(ASSET_MANAGER_ROLE, msg.sender);
+        _grantRole(APPROVER_ROLE, msg.sender);
     }
 
     // ------------------------------------------------------------------
@@ -49,7 +51,8 @@ contract SampraanAccessControl is AccessControl {
         bool adminish =
             role == DEFAULT_ADMIN_ROLE ||
             role == IDENTITY_ADMIN_ROLE ||
-            role == ASSET_MANAGER_ROLE;
+            role == ASSET_MANAGER_ROLE ||
+            role == APPROVER_ROLE;
         if (!adminish) return;
         bool hasAuditor = hasRole(AUDITOR_ROLE, account);
         // Granting an administrative role to an auditor, or granting the
@@ -64,7 +67,8 @@ contract SampraanAccessControl is AccessControl {
             if (
                 hasRole(DEFAULT_ADMIN_ROLE, account) ||
                 hasRole(IDENTITY_ADMIN_ROLE, account) ||
-                hasRole(ASSET_MANAGER_ROLE, account)
+                hasRole(ASSET_MANAGER_ROLE, account) ||
+                hasRole(APPROVER_ROLE, account)
             ) {
                 revert AuditorRoleNotExclusive();
             }

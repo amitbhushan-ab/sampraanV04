@@ -142,6 +142,15 @@ contract SampraanAssetRegistry is ERC721, ISampraanGovernanceTarget {
     uint256 public auditReportCount;
     event AuditReportHashStored(uint256 indexed reportId, address indexed auditor, bytes32 indexed reportHash, uint64 at);
 
+    /// ---------------- external evidence anchoring (TinyFish / Approver) ----
+    event EvidenceAnchored(
+        bytes32 indexed evidenceHash,
+        string sourceUrl,
+        uint64 fetchedAt,
+        uint8 kind,
+        address approver
+    );
+
     /// ---------------- ownership history (auditor verification surface) ----
     struct CustodyRecord {
         address fromCustodian;
@@ -171,8 +180,17 @@ contract SampraanAssetRegistry is ERC721, ISampraanGovernanceTarget {
     error AssetDisputed();
     error NotAuditor();
     error NotAdmin();
+    error NotApprover();
     error DisputeNotOpen();
     error EmptyEvidenceHash();
+
+    modifier onlyApprover() {
+        if (paused) revert Paused();
+        if (!accessControl.hasRole(accessControl.APPROVER_ROLE(), msg.sender)) {
+            revert NotApprover();
+        }
+        _;
+    }
 
     modifier onlyAssetManager() {
         if (paused) revert Paused();
@@ -534,6 +552,23 @@ contract SampraanAssetRegistry is ERC721, ISampraanGovernanceTarget {
         uint256 id = ++auditReportCount;
         auditReports[id] = AuditReport({ auditor: msg.sender, reportHash: reportHash, at: uint64(block.timestamp) });
         emit AuditReportHashStored(id, msg.sender, reportHash, uint64(block.timestamp));
+    }
+
+    /**
+     * @notice Anchor an approved outside evidence record (advisory, claim, or portal audit).
+     * @param evidenceHash sha256 digest of the extracted clean text or canonical JSON proof.
+     * @param sourceUrl Public source URL where evidence was fetched.
+     * @param fetchedAt Unix timestamp (UTC seconds) when the connector fetched the evidence.
+     * @param kind Numeric enum of evidence kind (0: ADVISORY, 1: CLAIM, 2: PORTAL).
+     */
+    function anchorEvidence(
+        bytes32 evidenceHash,
+        string calldata sourceUrl,
+        uint64 fetchedAt,
+        uint8 kind
+    ) external onlyApprover {
+        if (evidenceHash == bytes32(0)) revert ZeroDigest();
+        emit EvidenceAnchored(evidenceHash, sourceUrl, fetchedAt, kind, msg.sender);
     }
 
     // ------------------------------------------------------------------

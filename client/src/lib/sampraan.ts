@@ -109,11 +109,34 @@ export function formatClock(value: Date | string | null | undefined): string {
 }
 
 /** Full timestamp for title tooltips / evidence export context. */
-export function formatTimestamp(value: Date | string | null | undefined): string {
+export function formatTimestamp(
+  value: Date | string | null | undefined
+): string {
   if (value === null || value === undefined) return "—";
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString([], { hour12: false });
+}
+
+/**
+ * Governance proposal kind for display. The contract exposes OpKind as an
+ * ordinal, so a raw number ("#7 · 5") tells an operator nothing — and the
+ * offset is fixed by SampraanGovernance.sol, not by this app.
+ */
+const OP_KINDS = [
+  "NONE",
+  "GRANT_ROLE",
+  "REVOKE_ROLE",
+  "BURN_NFT",
+  "FORCE_TRANSFER",
+  "PAUSE_REGISTRY",
+  "UNPAUSE_REGISTRY",
+  "DEACTIVATE_IDENTITY",
+] as const;
+
+export function opKindLabel(kind: number | null | undefined): string {
+  if (kind === null || kind === undefined) return "—";
+  return OP_KINDS[kind] ?? `UNRECOGNISED OPKIND ${kind}`;
 }
 
 /** Shorten a DID for dense tables: did:ethr:0x7a93…c21 → did:ethr:0x7a…c21. */
@@ -124,33 +147,64 @@ export function shortDid(did: string | null | undefined, keep = 10): string {
 }
 
 /** Avatar / side-user initials from a display name or email. */
-export function initials(name: string | null | undefined, fallback = "OP"): string {
+export function initials(
+  name: string | null | undefined,
+  fallback = "OP"
+): string {
   if (!name) return fallback;
-  const parts = name.trim().split(/[\s@._-]+/).filter(Boolean);
+  const parts = name
+    .trim()
+    .split(/[\s@._-]+/)
+    .filter(Boolean);
   if (parts.length === 0) return fallback;
   const first = parts[0]?.[0] ?? "";
-  const second = parts.length > 1 ? (parts[1]?.[0] ?? "") : (parts[0]?.[1] ?? "");
+  const second =
+    parts.length > 1 ? (parts[1]?.[0] ?? "") : (parts[0]?.[1] ?? "");
   return (first + second).toUpperCase() || fallback;
 }
 
+/**
+ * Ledger numbers are grouped in a fixed locale on purpose: bare
+ * `toLocaleString()` follows the host machine, so the same block height read
+ * 18,492,201 on one operator's laptop and 1,84,92,201 on another.
+ */
+const ledgerNumber = new Intl.NumberFormat("en-US");
+
+export function formatCount(value: number | null | undefined): string {
+  return value === null || value === undefined
+    ? "—"
+    : ledgerNumber.format(value);
+}
+
 /** Tx hash / block cell for audit rows; keeps monospace density when data is absent. */
-export function formatTxHash(event: Pick<AuditEvent, "transactionHash" | "blockNumber">): string {
+export function formatTxHash(
+  event: Pick<AuditEvent, "transactionHash" | "blockNumber">
+): string {
   if (event.transactionHash) {
-    const block = event.blockNumber ? ` / #${event.blockNumber.toLocaleString()}` : "";
+    const block = event.blockNumber
+      ? ` / #${formatCount(event.blockNumber)}`
+      : "";
     return `${shortDid(event.transactionHash, 8)}${block}`;
   }
-  return event.blockNumber ? `BLOCK #${event.blockNumber.toLocaleString()}` : "NOT ANCHORED";
+  return event.blockNumber
+    ? `BLOCK #${formatCount(event.blockNumber)}`
+    : "NOT ANCHORED";
 }
 
 /** Map actor identity id → identity record for audit/alert actor resolution. */
-export function identityMap(identities: Identity[] | undefined | null): Map<string, Identity> {
+export function identityMap(
+  identities: Identity[] | undefined | null
+): Map<string, Identity> {
   const map = new Map<string, Identity>();
   for (const identity of identities ?? []) map.set(identity.id, identity);
   return map;
 }
 
 /** Mid-truncate a long technical value (tx hash, policy id) keeping both ends. */
-export function truncateMid(value: string | null | undefined, keep = 8): string {
+export function truncateMid(
+  value: string | null | undefined,
+  keep = 8
+): string {
   if (!value) return "—";
   if (value.length <= keep * 2 + 1) return value;
   return `${value.slice(0, keep)}…${value.slice(-keep)}`;
@@ -174,10 +228,15 @@ export interface AuditDisplayRow {
 }
 
 /** Normalize audit events into the workspace table contract. */
-export function toAuditRows(events: AuditEvent[] | undefined | null, identities: Identity[] | undefined | null): AuditDisplayRow[] {
+export function toAuditRows(
+  events: AuditEvent[] | undefined | null,
+  identities: Identity[] | undefined | null
+): AuditDisplayRow[] {
   const byId = identityMap(identities);
   return (events ?? []).map((event, index) => {
-    const actor = event.actorIdentityId ? byId.get(event.actorIdentityId) : undefined;
+    const actor = event.actorIdentityId
+      ? byId.get(event.actorIdentityId)
+      : undefined;
     return {
       key: event.id ?? `${event.timestamp?.toString?.() ?? index}-${index}`,
       time: formatClock(event.timestamp),
@@ -213,13 +272,19 @@ export interface DecisionDisplayRow {
   block: number | null;
 }
 
-export function toDecisionRows(events: AuditEvent[] | undefined | null, identities: Identity[] | undefined | null, limit = 4): DecisionDisplayRow[] {
+export function toDecisionRows(
+  events: AuditEvent[] | undefined | null,
+  identities: Identity[] | undefined | null,
+  limit = 4
+): DecisionDisplayRow[] {
   const byId = identityMap(identities);
   return (events ?? [])
     .filter(event => event.action.startsWith("AUTHORIZATION"))
     .slice(0, limit)
     .map((event, index) => {
-      const actor = event.actorIdentityId ? byId.get(event.actorIdentityId) : undefined;
+      const actor = event.actorIdentityId
+        ? byId.get(event.actorIdentityId)
+        : undefined;
       return {
         key: event.id ?? `${index}`,
         time: formatClock(event.timestamp),
@@ -246,16 +311,19 @@ export interface EventFeedRow {
   tone: Tone;
 }
 
-export function toEventFeed(events: AuditEvent[] | undefined | null, limit = 4): EventFeedRow[] {
-  return (events ?? [])
-    .slice(0, limit)
-    .map((event, index) => ({
-      key: event.id ?? `${index}`,
-      label: event.action.replace(/_/g, " "),
-      meta: [event.resourceId ?? event.resourceType, event.decision ?? "RECORDED"].filter(Boolean).join(" / "),
-      time: formatClock(event.timestamp),
-      tone: decisionTone(event.decision),
-    }));
+export function toEventFeed(
+  events: AuditEvent[] | undefined | null,
+  limit = 4
+): EventFeedRow[] {
+  return (events ?? []).slice(0, limit).map((event, index) => ({
+    key: event.id ?? `${index}`,
+    label: event.action.replace(/_/g, " "),
+    meta: [event.resourceId ?? event.resourceType, event.decision ?? "RECORDED"]
+      .filter(Boolean)
+      .join(" / "),
+    time: formatClock(event.timestamp),
+    tone: decisionTone(event.decision),
+  }));
 }
 
 /** Aggregate alert metrics for the Security Intelligence page without inventing new APIs. */
@@ -267,14 +335,18 @@ export interface AlertMetrics {
   criticalCount: number;
 }
 
-export function alertMetrics(alerts: SecurityAlert[] | undefined | null): AlertMetrics {
+export function alertMetrics(
+  alerts: SecurityAlert[] | undefined | null
+): AlertMetrics {
   const list = alerts ?? [];
   const open = list.filter(alert => alert.status === "OPEN");
   const investigating = list.filter(alert => alert.status === "INVESTIGATING");
   const risks = open.map(alert => alert.riskScore ?? 0);
   const highRiskIdentities = new Set(
     open
-      .filter(alert => alert.severity === "HIGH" || alert.severity === "CRITICAL")
+      .filter(
+        alert => alert.severity === "HIGH" || alert.severity === "CRITICAL"
+      )
       .map(alert => alert.identityId ?? alert.id)
   );
   return {
@@ -282,12 +354,16 @@ export function alertMetrics(alerts: SecurityAlert[] | undefined | null): AlertM
     investigatingCount: investigating.length,
     maxRisk: risks.length ? Math.max(...risks) : null,
     highRiskIdentities: highRiskIdentities.size,
-    criticalCount: list.filter(alert => alert.severity === "CRITICAL" && alert.status !== "RESOLVED").length,
+    criticalCount: list.filter(
+      alert => alert.severity === "CRITICAL" && alert.status !== "RESOLVED"
+    ).length,
   };
 }
 
 /** First open alert for the Alerts investigation hero, falling back to the newest alert. */
-export function primaryAlert(alerts: SecurityAlert[] | undefined | null): SecurityAlert | null {
+export function primaryAlert(
+  alerts: SecurityAlert[] | undefined | null
+): SecurityAlert | null {
   const list = alerts ?? [];
   return list.find(alert => alert.status === "OPEN") ?? list[0] ?? null;
 }
@@ -304,7 +380,10 @@ export interface AssetDisplayRow {
 }
 
 /** Normalize assets for the registry table, resolving custodian identity ids to names. */
-export function toAssetRows(assets: Asset[] | undefined | null, identities: Identity[] | undefined | null): AssetDisplayRow[] {
+export function toAssetRows(
+  assets: Asset[] | undefined | null,
+  identities: Identity[] | undefined | null
+): AssetDisplayRow[] {
   const byId = identityMap(identities);
   return (assets ?? []).map(asset => {
     const custodian = byId.get(asset.custodianIdentityId);
@@ -322,7 +401,9 @@ export function toAssetRows(assets: Asset[] | undefined | null, identities: Iden
 }
 
 /** Asset mix for the Command Center asset activity panel, bucketed by asset type keyword. */
-export function assetMix(assets: Asset[] | undefined | null): { label: string; count: number; ratio: number }[] {
+export function assetMix(
+  assets: Asset[] | undefined | null
+): { label: string; count: number; ratio: number }[] {
   const list = assets ?? [];
   const buckets: { label: string; count: number }[] = [
     { label: "FIRMWARE", count: 0 },
@@ -344,14 +425,27 @@ export function assetMix(assets: Asset[] | undefined | null): { label: string; c
   }
   const counted = buckets.reduce((sum, bucket) => sum + bucket.count, 0);
   const total = Math.max(list.length, counted, 1);
-  return buckets.map(bucket => ({ label: bucket.label, count: bucket.count, ratio: Math.round((bucket.count / total) * 100) }));
+  return buckets.map(bucket => ({
+    label: bucket.label,
+    count: bucket.count,
+    ratio: Math.round((bucket.count / total) * 100),
+  }));
 }
 
 /** Filter text for the asset registry search field. */
-export function matchesAssetQuery(asset: AssetDisplayRow, query: string): boolean {
+export function matchesAssetQuery(
+  asset: AssetDisplayRow,
+  query: string
+): boolean {
   const q = query.trim().toUpperCase();
   if (!q) return true;
-  return [asset.name, asset.assetId, asset.classification, asset.custodian, asset.status].some(value => value.toUpperCase().includes(q));
+  return [
+    asset.name,
+    asset.assetId,
+    asset.classification,
+    asset.custodian,
+    asset.status,
+  ].some(value => value.toUpperCase().includes(q));
 }
 
 /* ------------------------------------------------------------------ */
@@ -383,7 +477,13 @@ export function permissionLabel(key: string): string {
 }
 
 /** Resource families shown in the compact permission matrix, in display order. */
-export const MATRIX_RESOURCES = ["Assets", "Identities", "Policies", "Audit logs", "Administration"] as const;
+export const MATRIX_RESOURCES = [
+  "Assets",
+  "Identities",
+  "Policies",
+  "Audit logs",
+  "Administration",
+] as const;
 export type MatrixResource = (typeof MATRIX_RESOURCES)[number];
 
 /** The three access levels per resource row in the matrix. */
@@ -394,8 +494,9 @@ export type MatrixLevel = (typeof MATRIX_LEVELS)[number];
  * Map permission keys for a role onto the compact READ/WRITE/ADMIN matrix.
  * Derived ONLY from the server-provided permission keys — no invented grants.
  */
-export function permissionMatrix(permissionKeys: string[]): Record<MatrixResource, Record<MatrixLevel, boolean>> {
-  const has = new Set(permissionKeys);
+export function permissionMatrix(
+  permissionKeys: string[]
+): Record<MatrixResource, Record<MatrixLevel, boolean>> {
   const grants: Record<string, [MatrixResource, MatrixLevel][]> = {
     "asset:read": [["Assets", "READ"]],
     "asset:create": [["Assets", "WRITE"]],
@@ -413,10 +514,14 @@ export function permissionMatrix(permissionKeys: string[]): Record<MatrixResourc
     "administration:manage": [["Administration", "ADMIN"]],
   };
   const matrix = Object.fromEntries(
-    MATRIX_RESOURCES.map(resource => [resource, Object.fromEntries(MATRIX_LEVELS.map(level => [level, false]))]),
+    MATRIX_RESOURCES.map(resource => [
+      resource,
+      Object.fromEntries(MATRIX_LEVELS.map(level => [level, false])),
+    ])
   ) as Record<MatrixResource, Record<MatrixLevel, boolean>>;
   for (const key of permissionKeys) {
-    for (const [resource, level] of grants[key] ?? []) matrix[resource][level] = true;
+    for (const [resource, level] of grants[key] ?? [])
+      matrix[resource][level] = true;
   }
   return matrix;
 }

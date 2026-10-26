@@ -30,6 +30,9 @@ import {
   securityAlerts,
   sessions,
   users,
+  evidence,
+  type Evidence,
+  type InsertEvidence,
   type Asset,
   type AssetContentVersion,
   type Identity,
@@ -1785,4 +1788,136 @@ export async function listAssuranceChallenges(identityId: string) {
     .where(eq(assuranceChallenges.identityId, identityId))
     .orderBy(desc(assuranceChallenges.createdAt))
     .limit(50);
+}
+
+// ------------------------------------------------------------------
+// TinyFish External Evidence Read-Model & Approval Queue
+// ------------------------------------------------------------------
+
+const _inMemoryEvidence: Evidence[] = [];
+let _evidenceIdCounter = 1;
+
+export async function createEvidenceRecord(input: {
+  kind: "ADVISORY" | "CLAIM" | "PORTAL";
+  component: string;
+  sourceUrl: string;
+  fetchedAt?: Date;
+  sha256: string;
+  ipfsCid?: string | null;
+  riskScore?: number;
+  status?: "PENDING" | "APPROVED" | "REJECTED" | "ANCHORED";
+  approvedBy?: string | null;
+  txHash?: string | null;
+  rawText?: string | null;
+}): Promise<Evidence> {
+  const db = await getDb();
+  const now = new Date();
+  const item: InsertEvidence = {
+    kind: input.kind,
+    component: input.component,
+    sourceUrl: input.sourceUrl,
+    fetchedAt: input.fetchedAt ?? now,
+    sha256: input.sha256,
+    ipfsCid: input.ipfsCid ?? null,
+    riskScore: input.riskScore ?? 0,
+    status: input.status ?? "PENDING",
+    approvedBy: input.approvedBy ?? null,
+    txHash: input.txHash ?? null,
+    rawText: input.rawText ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  if (!db) {
+    const memItem: Evidence = {
+      id: _evidenceIdCounter++,
+      kind: item.kind,
+      component: item.component,
+      sourceUrl: item.sourceUrl,
+      fetchedAt: item.fetchedAt ?? now,
+      sha256: item.sha256,
+      ipfsCid: item.ipfsCid ?? null,
+      riskScore: item.riskScore ?? 0,
+      status: item.status ?? "PENDING",
+      approvedBy: item.approvedBy ?? null,
+      txHash: item.txHash ?? null,
+      rawText: item.rawText ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    _inMemoryEvidence.unshift(memItem);
+    return memItem;
+  }
+
+  const [res] = await db.insert(evidence).values(item);
+  const insertedId = res?.insertId ? Number(res.insertId) : undefined;
+  if (insertedId) {
+    const [row] = await db.select().from(evidence).where(eq(evidence.id, insertedId)).limit(1);
+    if (row) return row;
+  }
+  const [latest] = await db.select().from(evidence).where(eq(evidence.sha256, input.sha256)).orderBy(desc(evidence.id)).limit(1);
+  return latest!;
+}
+
+export async function listEvidenceRecords(filter?: {
+  status?: "PENDING" | "APPROVED" | "REJECTED" | "ANCHORED";
+  kind?: "ADVISORY" | "CLAIM" | "PORTAL";
+  limit?: number;
+}): Promise<Evidence[]> {
+  const db = await getDb();
+  if (!db) {
+    let res = [..._inMemoryEvidence];
+    if (filter?.status) res = res.filter(e => e.status === filter.status);
+    if (filter?.kind) res = res.filter(e => e.kind === filter.kind);
+    return res.slice(0, filter?.limit ?? 100);
+  }
+
+  let query = db.select().from(evidence).$dynamic();
+  const conditions = [];
+  if (filter?.status) conditions.push(eq(evidence.status, filter.status));
+  if (filter?.kind) conditions.push(eq(evidence.kind, filter.kind));
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions));
+  }
+  return query.orderBy(desc(evidence.id)).limit(filter?.limit ?? 100);
+}
+
+export async function getEvidenceRecordById(id: number): Promise<Evidence | null> {
+  const db = await getDb();
+  if (!db) {
+    return _inMemoryEvidence.find(e => e.id === id) ?? null;
+  }
+  const [row] = await db.select().from(evidence).where(eq(evidence.id, id)).limit(1);
+  return row ?? null;
+}
+
+export async function updateEvidenceRecordStatus(
+  id: number,
+  update: {
+    status: "PENDING" | "APPROVED" | "REJECTED" | "ANCHORED";
+    approvedBy?: string | null;
+    txHash?: string | null;
+  }
+): Promise<Evidence | null> {
+  const db = await getDb();
+  const now = new Date();
+  if (!db) {
+    const item = _inMemoryEvidence.find(e => e.id === id);
+    if (!item) return null;
+    item.status = update.status;
+    if (update.approvedBy !== undefined) item.approvedBy = update.approvedBy;
+    if (update.txHash !== undefined) item.txHash = update.txHash;
+    item.updatedAt = now;
+    return item;
+  }
+
+  await db.update(evidence).set({
+    status: update.status,
+    ...(update.approvedBy !== undefined ? { approvedBy: update.approvedBy } : {}),
+    ...(update.txHash !== undefined ? { txHash: update.txHash } : {}),
+    updatedAt: now,
+  }).where(eq(evidence.id, id));
+
+  const [row] = await db.select().from(evidence).where(eq(evidence.id, id)).limit(1);
+  return row ?? null;
 }

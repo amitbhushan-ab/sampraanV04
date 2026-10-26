@@ -1,4 +1,4 @@
-import { randomUUID, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import type {
   BlockchainOperationInput,
   NetworkStatus,
@@ -49,5 +49,36 @@ export class MockBlockchainService {
 
   async getEvents(): Promise<never[]> {
     return [];
+  }
+
+  async anchorEvidence(input: {
+    evidenceHash: string;
+    sourceUrl: string;
+    fetchedAt: number;
+    kind: number;
+  }): Promise<TransactionEvidence> {
+    const transactionHash = `0x${randomBytes(32).toString('hex')}`;
+    const transaction: TransactionEvidence = {
+      transactionHash,
+      blockNumber: ++this.block,
+      status: "CONFIRMED",
+      events: [
+        {
+          name: "EvidenceAnchored",
+          address: "0x0000000000000000000000000000000000000000",
+          blockNumber: this.block,
+          transactionHash,
+          args: {
+            evidenceHash: input.evidenceHash,
+            sourceUrl: input.sourceUrl,
+            fetchedAt: input.fetchedAt,
+            kind: input.kind,
+            approver: "0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63",
+          },
+        },
+      ],
+    };
+    this.transactions.set(transactionHash, transaction);
+    return transaction;
   }
 }

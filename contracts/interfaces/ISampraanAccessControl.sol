@@ -12,5 +12,6 @@ interface ISampraanAccessControl {
     function IDENTITY_ADMIN_ROLE() external view returns (bytes32);
     function ASSET_MANAGER_ROLE() external view returns (bytes32);
     function AUDITOR_ROLE() external view returns (bytes32);
+    function APPROVER_ROLE() external view returns (bytes32);
     function hasRole(bytes32 role, address account) external view returns (bool);
 }

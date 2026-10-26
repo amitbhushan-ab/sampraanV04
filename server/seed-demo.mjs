@@ -653,6 +653,46 @@ try {
   }
 
   await seedDemoAssetContent({ id, upsert });
+
+  // Seed initial TinyFish evidence records (§8 sketch)
+  try {
+    const seedEvidence = [
+      {
+        kind: "ADVISORY",
+        component: "OpenZeppelin Contracts",
+        source_url: "https://github.com/advisories/GHSA-openzeppelincontracts-cve",
+        sha256: "3e3292cd0bacf4131265c42d6492b86cdb70b451385166d4d6a2c8f9e3b440db",
+        risk_score: 100,
+        raw_text: "# Security Advisory: OpenZeppelin Contracts Security Vulnerability\nComponent: OpenZeppelin Contracts\nSeverity: Critical / High (CVSS 8.8)",
+      },
+      {
+        kind: "ADVISORY",
+        component: "Hyperledger Besu",
+        source_url: "https://github.com/advisories/GHSA-hyperledgerbesu-cve",
+        sha256: "5da1a6a61a82690448140cb6eecd4068bc8ceaf2a7f8f0f08df5d1badf963e05",
+        risk_score: 100,
+        raw_text: "# Security Advisory: Hyperledger Besu Security Vulnerability\nComponent: Hyperledger Besu\nSeverity: Critical / High (CVSS 8.8)",
+      },
+      {
+        kind: "CLAIM",
+        component: "Bharat Electronics Limited (BEL)",
+        source_url: "https://github.com/advisories/vendor/BEL",
+        sha256: "718b1813e884659e5d4ff74b5717367c3222ab088f2dd15399b3d358caf6bddd",
+        risk_score: 20,
+        raw_text: '{"companyName":"Bharat Electronics Limited (BEL)","registrationNumber":"L32309KA1954GOI000787","status":"ACTIVE"}',
+      },
+    ];
+
+    for (const item of seedEvidence) {
+      await upsert(
+        "INSERT INTO evidence (kind, component, source_url, sha256, risk_score, status, raw_text) VALUES (?, ?, ?, ?, ?, 'PENDING', ?) ON DUPLICATE KEY UPDATE risk_score = VALUES(risk_score)",
+        [item.kind, item.component, item.source_url, item.sha256, item.risk_score, item.raw_text]
+      );
+    }
+  } catch {
+    // Non-fatal if table not yet migrated
+  }
+
   await connection.commit();
   console.log("Deterministic SAMPRAAN development seed applied (idempotent).");
   console.log("Local accounts (fictional, dev-only):");

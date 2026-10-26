@@ -10,7 +10,12 @@ export function useAuth() {
   // who the server currently says we are. stаleTime is 0 and the query
   // revalidates on window focus, so switching to a tab shows the correct
   // identity within one round trip; data hooks keep their own short staleness.
-  const { data: user, isLoading, error, refetch } = trpc.auth.me.useQuery(undefined, {
+  const {
+    data: user,
+    isLoading,
+    error,
+    refetch,
+  } = trpc.auth.me.useQuery(undefined, {
     retry: false,
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -21,7 +26,7 @@ export function useAuth() {
       toast.success("Signed out successfully");
       window.location.reload();
     },
-    onError: (err) => {
+    onError: err => {
       console.error("Logout error:", err);
       // Still reload even if mutation fails
       window.location.reload();

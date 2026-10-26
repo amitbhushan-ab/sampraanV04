@@ -75,6 +75,10 @@ export class SampraanAccessControlHandle {
     return call<string>(this.contract.AUDITOR_ROLE);
   }
 
+  APPROVER_ROLE(): Promise<string> {
+    return call<string>(this.contract.APPROVER_ROLE);
+  }
+
   hasRole(role: string, account: string): Promise<boolean> {
     return call<boolean>(this.contract.hasRole, role, account);
   }
@@ -310,6 +314,15 @@ export class SampraanAssetRegistryHandle {
     reportHash: string
   ): Promise<{ wait: (c?: number) => Promise<unknown> }> {
     return call(this.contract.storeAuditReportHash, reportHash);
+  }
+
+  anchorEvidence(
+    evidenceHash: string,
+    sourceUrl: string,
+    fetchedAt: bigint,
+    kind: number
+  ): Promise<{ wait: (c?: number) => Promise<unknown>; hash?: string }> {
+    return call(this.contract.anchorEvidence, evidenceHash, sourceUrl, fetchedAt, kind);
   }
 
   verifyOwnership(tokenId: bigint, wallet: string): Promise<boolean> {
