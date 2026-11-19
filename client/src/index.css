@@ -12,25 +12,6 @@
    -------------------------------------------------------------------------- */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Animations consumed by the Aceternity component layer below. Declaring them
-   as theme tokens (rather than loose CSS) keeps them tree-shaken and usable as
-   ordinary `animate-*` utilities. */
-@theme{--animate-aurora: aurora 60s linear infinite;
---animate-spotlight: spotlight 2s ease 0.75s 1 forwards;
---animate-scroll: scroll var(--animation-duration, 40s) var(--animation-direction, forwards) linear infinite;}
-
-@keyframes aurora{
-  from { background-position: 50% 50%, 50% 50%; }
-  to { background-position: 350% 50%, 350% 50%; }
-}
-@keyframes spotlight{
-  0% { opacity: 0; transform: translate(-72%, -62%) scale(0.5); }
-  100% { opacity: 1; transform: translate(-50%, -40%) scale(1); }
-}
-@keyframes scroll{
-  to { transform: translate(calc(-50% - 0.5rem)); }
-}
-
 /* ==========================================================================
    SAMPRAAN — Digital-India-inspired institutional design system
    Saffron/orange primary · deep navy typography · green health states ·
@@ -847,33 +828,3 @@ p,li,figcaption{text-wrap:pretty}
 h1{letter-spacing:-.032em}
 h2{letter-spacing:-.028em}
 h3{letter-spacing:-.018em}
-.ac-display{
-  font-size:clamp(40px,6vw,80px);line-height:1.02;letter-spacing:-.038em;font-weight:800;
-}
-.ac-display-sm{
-  font-size:clamp(32px,4.2vw,54px);line-height:1.06;letter-spacing:-.034em;font-weight:800;
-}
-.ac-lead{font-size:clamp(16px,1.35vw,19px);line-height:1.62;color:var(--muted);letter-spacing:-.005em}
-
-/* --- Surface primitives ------------------------------------------- */
-/* Note: only the unprefixed property is written. Declaring
-   -webkit-backdrop-filter alongside it makes Lightning CSS collapse the pair
-   and emit only the prefixed one, which silently removes the effect. */
-.ac-glass{
-  background:var(--material-glass);
-  backdrop-filter:var(--blur-glass);
-}
-.ac-card{
-  background:var(--panel);
-  border:1px solid var(--material-hairline);
-  border-radius:var(--radius-lg);
-  box-shadow:var(--elev-2);
-  transition:transform var(--dur-base) var(--ease-out-expo),box-shadow var(--dur-base) var(--ease-out-expo),border-color var(--dur-base) var(--ease-out-expo);
-}
-.ac-card:hover{transform:translateY(-3px);box-shadow:var(--elev-3);border-color:var(--material-hairline-strong)}
-.ac-shell{width:100%;max-width:var(--shell);margin:0 auto;padding-inline:var(--gutter)}
-.ac-band{padding-block:var(--band-y)}
-
-/* --- Aceternity overlay surfaces ---------------------------------- */
-/* AnimatedModal renders its own chrome; this binds it to the design system. */
-.dark .ac-modal-scrim{background:rgba(4,9,18,.62)}
