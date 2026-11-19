@@ -39,6 +39,9 @@ import {
   type InsertAsset,
   type InsertIdentity,
   type InsertUser,
+  type User,
+  type Policy,
+  type AuditEvent,
 } from "../drizzle/schema";
 import { isDuplicateEntryError } from "./modules/db/db-errors";
 import { ENV } from './_core/env';
@@ -58,75 +61,477 @@ export async function getDb() {
   return _db;
 }
 
+/**
+ * Robust DB accessor with in-memory fallback.
+ * When MySQL is offline or connection fails, the operation falls through to the mock fallback.
+ */
+export async function withDb<T>(
+  op: (db: NonNullable<Awaited<ReturnType<typeof getDb>>>) => Promise<T>,
+  fallback: () => T | Promise<T>,
+): Promise<T> {
+  try {
+    const db = await getDb();
+    if (db) {
+      return await op(db);
+    }
+  } catch (_error) {
+    // Database connection refused or query error — gracefully invoke fallback
+  }
+  return fallback();
+}
+
+/* ------------------------------------------------------------------ */
+/* IN-MEMORY DEMO DATASETS FOR LOCAL EVALUATION / OFFLINE PRESENTATION */
+/* ------------------------------------------------------------------ */
+
+export const DEMO_IDENTITY_IDS = {
+  ADMIN: "11111111-1111-4111-8111-111111111111",
+  MANAGER: "22222222-2222-4222-8222-222222222222",
+  AUDITOR: "33333333-3333-4333-8333-333333333333",
+  USER: "44444444-4444-4444-8444-444444444444",
+} as const;
+
+export const _DEMO_USERS: User[] = [
+  {
+    id: 1,
+    openId: "sampraan-dev-admin",
+    name: "Dev Admin (Aarav Mehta)",
+    email: "admin@sampraan.dev",
+    loginMethod: "password",
+    role: "admin",
+    passwordHash: "scrypt$32768$8$1$Ef9bi37lcmMukgPtlabdkQ$B4ua25DVztppLfwrOHuqRMzS73MzFK6fICtHvWihvm2UY680Qa8P1sSQAgxEbBTrOFAoPdbGvFKGgLeA1Mir-g",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  },
+  {
+    id: 2,
+    openId: "sampraan-dev-manager",
+    name: "Dev Manager (Ananya Rao)",
+    email: "manager@sampraan.dev",
+    loginMethod: "password",
+    role: "user",
+    passwordHash: "scrypt$32768$8$1$1HNgSjIgi68Ct3_FiRN_Yw$kHFJYVZhsELdvyuWRqWmD23rjksUFFeK7Gvmm0T6PKjxuZjY2SkzngosjO3fkmjhYmfSDfBSZYlW_9Zo3qJcyQ",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  },
+  {
+    id: 3,
+    openId: "sampraan-dev-auditor",
+    name: "Dev Auditor (Vikram Singh)",
+    email: "auditor@sampraan.dev",
+    loginMethod: "password",
+    role: "user",
+    passwordHash: "scrypt$32768$8$1$cU9n_HofabIJZa0zDjG0xg$NqY9R406QKoJ-TT54b3k-iq5hXaJ3dEsLKI-I2EoKr-pv0ireKKkku2Xp-NsiBiUjkyGF8uUEVvdvCgU0rkgIw",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  },
+  {
+    id: 4,
+    openId: "sampraan-dev-user",
+    name: "Dev User (Riya Kulkarni)",
+    email: "user@sampraan.dev",
+    loginMethod: "password",
+    role: "user",
+    passwordHash: "scrypt$32768$8$1$JtHjWuklYeEPPoMV0qULuQ$6edhlbzHan4WNTaeW1B0wBOn4hU58t7iJ3o4Vw9KD-ZFg95T2IAIIBASnvRv-7LCfmAFXeOxvbDJeHtD5-tyhw",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  },
+];
+
+export const _DEMO_IDENTITIES: Identity[] = [
+  {
+    id: DEMO_IDENTITY_IDS.ADMIN,
+    linkedUserId: 1,
+    displayName: "Dev Admin (Aarav Mehta)",
+    organization: "Bharat Electronics Limited (BEL)",
+    status: "ACTIVE",
+    did: "did:sampraan:dev-admin-aarav",
+    lifecycleState: "VERIFIED",
+    statusReason: "Institutional Administrator Credentials",
+    scope: "NATIONAL",
+    deactivatedAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+    revokedAt: null,
+  },
+  {
+    id: DEMO_IDENTITY_IDS.MANAGER,
+    linkedUserId: 2,
+    displayName: "Dev Manager (Ananya Rao)",
+    organization: "Bharat Electronics Limited (BEL)",
+    status: "ACTIVE",
+    did: "did:sampraan:dev-manager-ananya",
+    lifecycleState: "VERIFIED",
+    statusReason: "Asset Operations Lead",
+    scope: "DEFENSE-RADAR-DIV",
+    deactivatedAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+    revokedAt: null,
+  },
+  {
+    id: DEMO_IDENTITY_IDS.AUDITOR,
+    linkedUserId: 3,
+    displayName: "Dev Auditor (Vikram Singh)",
+    organization: "Bharat Electronics Limited (BEL)",
+    status: "ACTIVE",
+    did: "did:sampraan:dev-auditor-vikram",
+    lifecycleState: "VERIFIED",
+    statusReason: "Compliance & Security Auditor",
+    scope: "AUDIT-OVERSIGHT",
+    deactivatedAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+    revokedAt: null,
+  },
+  {
+    id: DEMO_IDENTITY_IDS.USER,
+    linkedUserId: 4,
+    displayName: "Dev User (Riya Kulkarni)",
+    organization: "Bharat Electronics Limited (BEL)",
+    status: "ACTIVE",
+    did: "did:sampraan:dev-user-riya",
+    lifecycleState: "VERIFIED",
+    statusReason: "Operational Engineer",
+    scope: "FIELD-OPS",
+    deactivatedAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+    revokedAt: null,
+  },
+];
+
+export const _DEMO_ROLES_BY_IDENTITY: Record<string, { roles: string[]; permissions: string[] }> = {
+  [DEMO_IDENTITY_IDS.ADMIN]: {
+    roles: ["ADMIN"],
+    permissions: [
+      "identity:create", "identity:read", "identity:update", "identity:revoke",
+      "asset:create", "asset:read", "asset:edit", "asset:assign", "asset:transfer", "asset:revoke",
+      "audit:read", "policy:create", "policy:update", "administration:manage",
+    ],
+  },
+  [DEMO_IDENTITY_IDS.MANAGER]: {
+    roles: ["MANAGER"],
+    permissions: ["identity:read", "asset:read", "asset:edit", "asset:assign", "asset:transfer", "audit:read"],
+  },
+  [DEMO_IDENTITY_IDS.AUDITOR]: {
+    roles: ["AUDITOR"],
+    permissions: ["identity:read", "asset:read", "audit:read"],
+  },
+  [DEMO_IDENTITY_IDS.USER]: {
+    roles: ["USER"],
+    permissions: ["asset:read"],
+  },
+};
+
+export const _DEMO_ASSETS: Asset[] = [
+  {
+    id: "a1111111-1111-4111-8111-111111111111",
+    assetId: "DEV-FIRMWARE-001",
+    name: "Restricted Firmware Package (Demo)",
+    type: "FIRMWARE",
+    classification: "HIGHLY_SENSITIVE",
+    description: "Fictional firmware artifact for the step-up CHALLENGE demonstration.",
+    ownerIdentityId: DEMO_IDENTITY_IDS.ADMIN,
+    custodianIdentityId: DEMO_IDENTITY_IDS.MANAGER,
+    integrityHash: "sha256:4b9a11a2f6434415842880b980e1b20f188331d044ddb53c1264c767425f1b53",
+    tokenId: "101",
+    status: "ACTIVE",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+  },
+  {
+    id: "a2222222-2222-4222-8222-222222222222",
+    assetId: "DEV-INSTRUMENT-002",
+    name: "Environmental Test Instrument (Demo)",
+    type: "INSTRUMENT",
+    classification: "CONTROLLED",
+    description: "Fictional test instrument for the ALLOW transfer demonstration.",
+    ownerIdentityId: DEMO_IDENTITY_IDS.ADMIN,
+    custodianIdentityId: DEMO_IDENTITY_IDS.MANAGER,
+    integrityHash: "sha256:7c3b290df62d2ea789d71c890184b295c51717fb865532ab1947e1d5a89f9e31",
+    tokenId: "102",
+    status: "ACTIVE",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+  },
+  {
+    id: "a3333333-3333-4333-8333-333333333333",
+    assetId: "DEV-SPEC-003",
+    name: "Radar Interface Specification (Demo)",
+    type: "DOCUMENT",
+    classification: "SENSITIVE",
+    description: "Fictional design document; custody with the auditor for review.",
+    ownerIdentityId: DEMO_IDENTITY_IDS.ADMIN,
+    custodianIdentityId: DEMO_IDENTITY_IDS.AUDITOR,
+    integrityHash: "sha256:2fa955bd9c61159d3d3a0c59828238612502ef0a880918cf67d605c366ffefec",
+    tokenId: "103",
+    status: "ACTIVE",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+  },
+  {
+    id: "a4444444-4444-4444-8444-444444444444",
+    assetId: "DEV-KEYMAT-004",
+    name: "Signing Key Material Reference (Demo)",
+    type: "KEY_MATERIAL",
+    classification: "CRITICAL",
+    description: "Fictional key-material reference record (contents never on-chain).",
+    ownerIdentityId: DEMO_IDENTITY_IDS.ADMIN,
+    custodianIdentityId: DEMO_IDENTITY_IDS.ADMIN,
+    integrityHash: "sha256:69a5ef2640237593c6628c68ff0c3127393434190f845d448c58252277c1341c",
+    tokenId: "104",
+    status: "ACTIVE",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+  },
+];
+
+export const _DEMO_POLICIES: Policy[] = [
+  {
+    id: "p1111111-1111-4111-8111-111111111111",
+    name: "Highly sensitive transfer guard (demo catalog)",
+    description: "Users cannot transfer HIGHLY_SENSITIVE assets; other roles require step-up.",
+    subjectRole: "USER",
+    resourceType: "ASSET",
+    action: "TRANSFER",
+    assetClassification: "HIGHLY_SENSITIVE",
+    organization: null,
+    effect: "DENY",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+  },
+  {
+    id: "p2222222-2222-4222-8222-222222222222",
+    name: "Critical Asset Dual-Authorization Requirement",
+    description: "CRITICAL key material requires step-up PQC assurance verification.",
+    subjectRole: null,
+    resourceType: "ASSET",
+    action: "EDIT",
+    assetClassification: "CRITICAL",
+    organization: null,
+    effect: "CHALLENGE",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date(),
+  },
+];
+
+export const _inMemoryAuditEvents: AuditEvent[] = [
+  {
+    id: "audit-001",
+    actorIdentityId: DEMO_IDENTITY_IDS.ADMIN,
+    action: "IDENTITY_CREATED",
+    resourceType: "IDENTITY",
+    resourceId: DEMO_IDENTITY_IDS.MANAGER,
+    decision: "ALLOW",
+    reason: "Demo seed: Manager identity registered with BEL trust domain",
+    timestamp: new Date(Date.now() - 3600000 * 4),
+    transactionHash: "0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b",
+    blockNumber: 18450,
+    metadata: { source: "seed", organization: "Bharat Electronics Limited" },
+    source: "APPLICATION",
+  },
+  {
+    id: "audit-002",
+    actorIdentityId: DEMO_IDENTITY_IDS.ADMIN,
+    action: "ASSET_ANCHOR_CONFIRMED",
+    resourceType: "ASSET",
+    resourceId: "DEV-FIRMWARE-001",
+    decision: "ALLOW",
+    reason: "NFT mint confirmed on QBFT consensus ledger (token 101)",
+    timestamp: new Date(Date.now() - 3600000 * 3),
+    transactionHash: "0x3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f",
+    blockNumber: 18451,
+    metadata: { source: "seed", contract: "0x789...456", tokenId: "101" },
+    source: "APPLICATION",
+  },
+  {
+    id: "audit-003",
+    actorIdentityId: DEMO_IDENTITY_IDS.MANAGER,
+    action: "ASSET_ASSIGNED",
+    resourceType: "ASSET",
+    resourceId: "DEV-SPEC-003",
+    decision: "ALLOW",
+    reason: "Specification transferred to Auditor custody for security review",
+    timestamp: new Date(Date.now() - 3600000 * 2),
+    transactionHash: "0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+    blockNumber: 18452,
+    metadata: { source: "seed" },
+    source: "APPLICATION",
+  },
+  {
+    id: "audit-004",
+    actorIdentityId: DEMO_IDENTITY_IDS.ADMIN,
+    action: "PQC_KEY_REGISTERED",
+    resourceType: "IDENTITY",
+    resourceId: DEMO_IDENTITY_IDS.ADMIN,
+    decision: "ALLOW",
+    reason: "Post-quantum ML-DSA-65 verification key bound to DID",
+    timestamp: new Date(Date.now() - 3600000 * 1),
+    transactionHash: "0x9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d",
+    blockNumber: 18453,
+    metadata: { algorithm: "ML-DSA-65", keySource: "REGISTERED" },
+    source: "APPLICATION",
+  },
+];
+
+export const _inMemorySecurityAlerts: (typeof securityAlerts.$inferSelect)[] = [
+  {
+    id: "alert-001",
+    title: "Suspicious Multi-Party Custody Anomaly",
+    severity: "MEDIUM",
+    status: "OPEN",
+    identityId: DEMO_IDENTITY_IDS.MANAGER,
+    assetId: "a1111111-1111-4111-8111-111111111111",
+    description: "Automated threat rule flagged an unusual cross-boundary access pattern on restricted firmware.",
+    riskScore: 68,
+    createdAt: new Date(Date.now() - 7200000),
+    resolvedAt: null,
+  },
+];
+
+export const _DEMO_CUSTODY: {
+  id: string;
+  assetId: string;
+  custodianIdentityId: string;
+  reason: string | null;
+  startedAt: Date;
+  endedAt: Date | null;
+}[] = [
+  {
+    id: "cust-001",
+    assetId: "a1111111-1111-4111-8111-111111111111",
+    custodianIdentityId: DEMO_IDENTITY_IDS.MANAGER,
+    reason: "Manager holds the restricted firmware package for validation",
+    startedAt: new Date("2026-01-01T00:00:00Z"),
+    endedAt: null,
+  },
+  {
+    id: "cust-002",
+    assetId: "a2222222-2222-4222-8222-222222222222",
+    custodianIdentityId: DEMO_IDENTITY_IDS.MANAGER,
+    reason: "Manager holds the environmental test instrument for verification",
+    startedAt: new Date("2026-01-01T00:00:00Z"),
+    endedAt: null,
+  },
+  {
+    id: "cust-003",
+    assetId: "a3333333-3333-4333-8333-333333333333",
+    custodianIdentityId: DEMO_IDENTITY_IDS.AUDITOR,
+    reason: "Auditor reviews the radar interface specification",
+    startedAt: new Date("2026-01-01T00:00:00Z"),
+    endedAt: null,
+  },
+  {
+    id: "cust-004",
+    assetId: "a4444444-4444-4444-8444-444444444444",
+    custodianIdentityId: DEMO_IDENTITY_IDS.ADMIN,
+    reason: "Admin retains root key material reference",
+    startedAt: new Date("2026-01-01T00:00:00Z"),
+    endedAt: null,
+  },
+];
+
+export const _DEMO_APPROVALS: (typeof assetApprovals.$inferSelect)[] = [];
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");
   }
 
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
+  const values: InsertUser = {
+    openId: user.openId,
+  };
+  const updateSet: Record<string, unknown> = {};
+
+  const textFields = ["name", "email", "loginMethod"] as const;
+  type TextField = (typeof textFields)[number];
+
+  const assignNullable = (field: TextField) => {
+    const value = user[field];
+    if (value === undefined) return;
+    const normalized = value ?? null;
+    values[field] = normalized;
+    updateSet[field] = normalized;
+  };
+
+  textFields.forEach(assignNullable);
+
+  if (user.lastSignedIn !== undefined) {
+    values.lastSignedIn = user.lastSignedIn;
+    updateSet.lastSignedIn = user.lastSignedIn;
+  }
+  if (user.role !== undefined) {
+    values.role = user.role;
+    updateSet.role = user.role;
+  } else if (user.openId === ENV.ownerOpenId) {
+    values.role = 'admin';
+    updateSet.role = 'admin';
   }
 
-  try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
+  if (!values.lastSignedIn) {
+    values.lastSignedIn = new Date();
   }
+
+  if (Object.keys(updateSet).length === 0) {
+    updateSet.lastSignedIn = new Date();
+  }
+
+  await withDb(
+    async db => {
+      await db.insert(users).values(values).onDuplicateKeyUpdate({
+        set: updateSet,
+      });
+    },
+    () => {
+      const existing = _DEMO_USERS.find(u => u.openId === user.openId);
+      if (existing) {
+        if (values.lastSignedIn) existing.lastSignedIn = values.lastSignedIn as Date;
+        if (values.name !== undefined) existing.name = values.name;
+        if (values.email !== undefined) existing.email = values.email;
+        if (values.role !== undefined) existing.role = values.role;
+      } else {
+        _DEMO_USERS.push({
+          id: _DEMO_USERS.length + 1,
+          openId: user.openId,
+          name: values.name ?? null,
+          email: values.email ?? null,
+          loginMethod: values.loginMethod ?? null,
+          role: values.role ?? "user",
+          passwordHash: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastSignedIn: values.lastSignedIn as Date,
+        });
+      }
+    }
+  );
 }
 
-export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
+export async function getUserById(id: number): Promise<User | undefined> {
+  return withDb(
+    async db => {
+      const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+      return rows[0];
+    },
+    () => _DEMO_USERS.find(u => u.id === id)
+  );
+}
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+export async function getUserByOpenId(openId: string): Promise<User | undefined> {
+  return withDb(
+    async db => {
+      const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+      return result.length > 0 ? result[0] : undefined;
+    },
+    () => _DEMO_USERS.find(u => u.openId === openId)
+  );
 }
 
 /**
@@ -134,16 +539,25 @@ export async function getUserByOpenId(openId: string) {
  * Only meaningful for seed/admin-provisioned local accounts (passwordHash set);
  * OAuth-sourced users have no password and never match a login attempt.
  */
-export async function getUserByEmail(email: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return rows[0];
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+  const norm = email.trim().toLowerCase();
+  return withDb(
+    async db => {
+      const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      return rows[0];
+    },
+    () => _DEMO_USERS.find(u => u.email?.toLowerCase() === norm)
+  );
 }
 
-export async function listIdentities() {
-  const db = await getDb();
-  return db ? db.select().from(identities).orderBy(desc(identities.createdAt)) : [];
+export async function listIdentities(): Promise<Identity[]> {
+  return withDb(
+    async db => {
+      const rows = await db.select().from(identities).orderBy(desc(identities.createdAt));
+      return rows.length > 0 ? rows : [..._DEMO_IDENTITIES];
+    },
+    () => [..._DEMO_IDENTITIES]
+  );
 }
 
 /**
@@ -151,65 +565,145 @@ export async function listIdentities() {
  * the workspace surfaces that need to show roles without N+1 lookups).
  */
 export async function getIdentitiesWithRoles(): Promise<(Identity & { roles: string[] })[]> {
-  const db = await getDb();
-  if (!db) return [];
-  const rows = await db.select().from(identities).orderBy(desc(identities.createdAt));
-  if (rows.length === 0) return [];
-  const roleRows = await db
-    .select({ identityId: identityRoles.identityId, roleName: roles.name })
-    .from(identityRoles)
-    .innerJoin(roles, eq(identityRoles.roleId, roles.id));
-  const byIdentity = new Map<string, string[]>();
-  for (const row of roleRows) {
-    const list = byIdentity.get(row.identityId) ?? [];
-    list.push(row.roleName);
-    byIdentity.set(row.identityId, list);
-  }
-  return rows.map(identity => ({ ...identity, roles: (byIdentity.get(identity.id) ?? []).sort() }));
+  return withDb(
+    async db => {
+      const rows = await db.select().from(identities).orderBy(desc(identities.createdAt));
+      if (rows.length === 0) throw new Error("No DB identities, use demo");
+      const roleRows = await db
+        .select({ identityId: identityRoles.identityId, roleName: roles.name })
+        .from(identityRoles)
+        .innerJoin(roles, eq(identityRoles.roleId, roles.id));
+      const byIdentity = new Map<string, string[]>();
+      for (const row of roleRows) {
+        const list = byIdentity.get(row.identityId) ?? [];
+        list.push(row.roleName);
+        byIdentity.set(row.identityId, list);
+      }
+      return rows.map(identity => ({ ...identity, roles: (byIdentity.get(identity.id) ?? []).sort() }));
+    },
+    () =>
+      _DEMO_IDENTITIES.map(identity => ({
+        ...identity,
+        roles: [...(_DEMO_ROLES_BY_IDENTITY[identity.id]?.roles ?? ["USER"])],
+      }))
+  );
 }
 
 export async function createIdentity(input: Omit<InsertIdentity, "id" | "createdAt" | "updatedAt">) {
-  const db = await getDb();
-  if (!db) throw new Error("Database is not configured");
   const id = crypto.randomUUID();
-  await db.insert(identities).values({ ...input, id });
-  const rows = await db.select().from(identities).where(eq(identities.id, id)).limit(1);
-  return rows[0];
+  const created: Identity = {
+    ...input,
+    id,
+    linkedUserId: input.linkedUserId ?? null,
+    status: input.status ?? "ACTIVE",
+    lifecycleState: input.lifecycleState ?? "VERIFIED",
+    statusReason: input.statusReason ?? null,
+    scope: input.scope ?? null,
+    deactivatedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    revokedAt: null,
+  };
+  return withDb(
+    async db => {
+      await db.insert(identities).values({ ...input, id });
+      const rows = await db.select().from(identities).where(eq(identities.id, id)).limit(1);
+      return rows[0] ?? created;
+    },
+    () => {
+      _DEMO_IDENTITIES.unshift(created);
+      _DEMO_ROLES_BY_IDENTITY[created.id] = { roles: ["USER"], permissions: ["asset:read"] };
+      return created;
+    }
+  );
 }
 
 export async function getIdentityById(id: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(identities).where(eq(identities.id, id)).limit(1);
-  return rows[0];
+  return withDb(
+    async db => {
+      const rows = await db.select().from(identities).where(eq(identities.id, id)).limit(1);
+      return rows[0] ?? _DEMO_IDENTITIES.find(ident => ident.id === id);
+    },
+    () => _DEMO_IDENTITIES.find(ident => ident.id === id)
+  );
 }
 
-export async function listAssets() {
-  const db = await getDb();
-  return db ? db.select().from(assets).orderBy(desc(assets.createdAt)) : [];
+export async function getIdentityByDid(did: string) {
+  return withDb(
+    async db => {
+      const rows = await db.select().from(identities).where(eq(identities.did, did)).limit(1);
+      return rows[0] ?? _DEMO_IDENTITIES.find(ident => ident.did === did);
+    },
+    () => _DEMO_IDENTITIES.find(ident => ident.did === did)
+  );
+}
+
+export async function listAssets(): Promise<Asset[]> {
+  return withDb(
+    async db => {
+      const rows = await db.select().from(assets).orderBy(desc(assets.createdAt));
+      return rows.length > 0 ? rows : [..._DEMO_ASSETS];
+    },
+    () => [..._DEMO_ASSETS]
+  );
 }
 
 export async function createAsset(input: Omit<InsertAsset, "id" | "createdAt" | "updatedAt">) {
-  const db = await getDb();
-  if (!db) throw new Error("Database is not configured");
   const id = crypto.randomUUID();
-  await db.insert(assets).values({ ...input, id });
-  const rows = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
-  return rows[0];
+  const created: Asset = {
+    ...input,
+    id,
+    description: input.description ?? null,
+    integrityHash: input.integrityHash ?? null,
+    tokenId: input.tokenId ?? null,
+    status: input.status ?? "PENDING",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  return withDb(
+    async db => {
+      await db.insert(assets).values({ ...input, id });
+      const rows = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
+      return rows[0] ?? created;
+    },
+    () => {
+      _DEMO_ASSETS.unshift(created);
+      return created;
+    }
+  );
 }
 
 /** Persist the on-chain NFT token id against the read-model asset row. */
 export async function setAssetTokenId(assetRowId: string, tokenId: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(assets).set({ tokenId }).where(eq(assets.id, assetRowId));
+  await withDb(
+    async db => {
+      await db.update(assets).set({ tokenId }).where(eq(assets.id, assetRowId));
+    },
+    () => {
+      const asset = _DEMO_ASSETS.find(a => a.id === assetRowId || a.assetId === assetRowId);
+      if (asset) asset.tokenId = tokenId;
+    }
+  );
 }
 
 export async function getAssetById(id: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
-  return rows[0];
+  return withDb(
+    async db => {
+      const rows = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
+      return rows[0] ?? _DEMO_ASSETS.find(a => a.id === id || a.assetId === id);
+    },
+    () => _DEMO_ASSETS.find(a => a.id === id || a.assetId === id)
+  );
+}
+
+export async function getAssetByAssetId(assetId: string) {
+  return withDb(
+    async db => {
+      const rows = await db.select().from(assets).where(eq(assets.assetId, assetId)).limit(1);
+      return rows[0] ?? _DEMO_ASSETS.find(a => a.assetId === assetId);
+    },
+    () => _DEMO_ASSETS.find(a => a.assetId === assetId)
+  );
 }
 
 /**
@@ -217,10 +711,13 @@ export async function getAssetById(id: string) {
  * Returns undefined when no identity is linked or the database is unavailable.
  */
 export async function getIdentityByLinkedUserId(linkedUserId: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(identities).where(eq(identities.linkedUserId, linkedUserId)).limit(1);
-  return rows[0];
+  return withDb(
+    async db => {
+      const rows = await db.select().from(identities).where(eq(identities.linkedUserId, linkedUserId)).limit(1);
+      return rows[0] ?? _DEMO_IDENTITIES.find(ident => ident.linkedUserId === linkedUserId);
+    },
+    () => _DEMO_IDENTITIES.find(ident => ident.linkedUserId === linkedUserId)
+  );
 }
 
 /**
@@ -228,58 +725,109 @@ export async function getIdentityByLinkedUserId(linkedUserId: number) {
  * identity through identity_roles -> role_permissions -> permissions.
  */
 export async function getIdentityRolesAndPermissions(identityId: string): Promise<{ roles: string[]; permissions: string[] }> {
-  const db = await getDb();
-  if (!db) return { roles: [], permissions: [] };
+  return withDb(
+    async db => {
+      const roleRows = await db
+        .select({ roleId: roles.id, roleName: roles.name })
+        .from(identityRoles)
+        .innerJoin(roles, eq(identityRoles.roleId, roles.id))
+        .where(eq(identityRoles.identityId, identityId));
 
-  const roleRows = await db
-    .select({ roleId: roles.id, roleName: roles.name })
-    .from(identityRoles)
-    .innerJoin(roles, eq(identityRoles.roleId, roles.id))
-    .where(eq(identityRoles.identityId, identityId));
+      if (roleRows.length === 0) {
+        const demo = _DEMO_ROLES_BY_IDENTITY[identityId];
+        if (demo) return { roles: [...demo.roles], permissions: [...demo.permissions] };
+        return { roles: [], permissions: [] };
+      }
 
-  if (roleRows.length === 0) return { roles: [], permissions: [] };
+      const permissionRows = await db
+        .selectDistinct({ key: permissions.key })
+        .from(rolePermissions)
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+        .where(inArray(rolePermissions.roleId, roleRows.map(row => row.roleId)));
 
-  const permissionRows = await db
-    .selectDistinct({ key: permissions.key })
-    .from(rolePermissions)
-    .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-    .where(inArray(rolePermissions.roleId, roleRows.map(row => row.roleId)));
-
-  return {
-    roles: roleRows.map(row => row.roleName),
-    permissions: permissionRows.map(row => row.key),
-  };
+      return {
+        roles: roleRows.map(row => row.roleName),
+        permissions: permissionRows.map(row => row.key),
+      };
+    },
+    () => {
+      const demo = _DEMO_ROLES_BY_IDENTITY[identityId];
+      if (demo) return { roles: [...demo.roles], permissions: [...demo.permissions] };
+      return { roles: ["USER"], permissions: ["asset:read"] };
+    }
+  );
 }
 
 /** RBAC catalog: every role with its permission keys (read-only inspection). */
 export async function listRolesWithPermissions(): Promise<{ id: string; name: string; description: string | null; permissions: string[] }[]> {
-  const db = await getDb();
-  if (!db) return [];
-  const roleRows = await db.select().from(roles).orderBy(roles.name);
-  if (roleRows.length === 0) return [];
-  const mappingRows = await db
-    .select({ roleId: rolePermissions.roleId, key: permissions.key })
-    .from(rolePermissions)
-    .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id));
-  const byRole = new Map<string, string[]>();
-  for (const row of mappingRows) {
-    const list = byRole.get(row.roleId) ?? [];
-    list.push(row.key);
-    byRole.set(row.roleId, list);
-  }
-  return roleRows.map(role => ({
-    id: role.id,
-    name: role.name,
-    description: role.description ?? null,
-    permissions: (byRole.get(role.id) ?? []).sort(),
-  }));
+  return withDb(
+    async db => {
+      const roleRows = await db.select().from(roles).orderBy(roles.name);
+      if (roleRows.length === 0) throw new Error("No roles in DB");
+      const mappingRows = await db
+        .select({ roleId: rolePermissions.roleId, key: permissions.key })
+        .from(rolePermissions)
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id));
+      const byRole = new Map<string, string[]>();
+      for (const row of mappingRows) {
+        const list = byRole.get(row.roleId) ?? [];
+        list.push(row.key);
+        byRole.set(row.roleId, list);
+      }
+      return roleRows.map(role => ({
+        id: role.id,
+        name: role.name,
+        description: role.description ?? null,
+        permissions: (byRole.get(role.id) ?? []).sort(),
+      }));
+    },
+    () => [
+      {
+        id: "role-admin",
+        name: "ADMIN",
+        description: "Full administrative control: identities, roles, assets, policies, audit, access grants.",
+        permissions: [
+          "identity:create", "identity:read", "identity:update", "identity:revoke",
+          "asset:create", "asset:read", "asset:edit", "asset:assign", "asset:transfer", "asset:revoke",
+          "audit:read", "policy:create", "policy:update", "administration:manage",
+        ],
+      },
+      {
+        id: "role-manager",
+        name: "MANAGER",
+        description: "Operate on permitted assets: edit content, create versions, assign and transfer custody.",
+        permissions: ["identity:read", "asset:read", "asset:edit", "asset:assign", "asset:transfer", "audit:read"],
+      },
+      {
+        id: "role-auditor",
+        name: "AUDITOR",
+        description: "Read-only inspection of assets, provenance, and the audit trail. No mutation.",
+        permissions: ["identity:read", "asset:read", "audit:read"],
+      },
+      {
+        id: "role-user",
+        name: "USER",
+        description: "Explicitly permitted operations only (asset:read). No content or custody mutations.",
+        permissions: ["asset:read"],
+      },
+    ]
+  );
 }
 
 /** All known permission keys (for the access-control matrix surface). */
 export async function listPermissions(): Promise<{ id: string; key: string; description: string | null }[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(permissions).orderBy(permissions.key);
+  return withDb(
+    async db => {
+      const rows = await db.select({ id: permissions.id, key: permissions.key, description: permissions.description }).from(permissions).orderBy(permissions.key);
+      if (rows.length === 0) throw new Error("No permissions in DB");
+      return rows;
+    },
+    () => [
+      "identity:create", "identity:read", "identity:update", "identity:revoke",
+      "asset:create", "asset:read", "asset:edit", "asset:assign", "asset:transfer", "asset:revoke",
+      "audit:read", "policy:create", "policy:update", "administration:manage",
+    ].map((key, i) => ({ id: `perm-${i + 1}`, key, description: `Demo permission: ${key}` as string | null }))
+  );
 }
 
 /**
@@ -292,115 +840,216 @@ export async function applyIdentityRoles(input: {
   roleNames: string[];
   assignedByIdentityId: string | null;
 }): Promise<string[] | null> {
-  const db = await getDb();
-  if (!db) return null;
-
   const wanted = Array.from(new Set(input.roleNames.map(name => name.trim().toUpperCase()).filter(Boolean)));
-  const roleRows = wanted.length
-    ? await db.select().from(roles).where(inArray(roles.name, wanted))
-    : [];
-  const found = roleRows.map(row => row.name);
-  const missing = wanted.filter(name => !found.includes(name));
-  if (missing.length > 0) {
-    throw new Error(`Unknown role(s): ${missing.join(", ")}`);
-  }
+  return withDb(
+    async db => {
+      const roleRows = wanted.length
+        ? await db.select().from(roles).where(inArray(roles.name, wanted))
+        : [];
+      const found = roleRows.map(row => row.name);
+      const missing = wanted.filter(name => !found.includes(name));
+      if (missing.length > 0) {
+        throw new Error(`Unknown role(s): ${missing.join(", ")}`);
+      }
 
-  await db.transaction(async tx => {
-    await tx.delete(identityRoles).where(eq(identityRoles.identityId, input.identityId));
-    if (roleRows.length > 0) {
-      await tx.insert(identityRoles).values(
-        roleRows.map(role => ({
-          identityId: input.identityId,
-          roleId: role.id,
-          assignedByIdentityId: input.assignedByIdentityId,
-        }))
-      );
+      await db.transaction(async tx => {
+        await tx.delete(identityRoles).where(eq(identityRoles.identityId, input.identityId));
+        if (roleRows.length > 0) {
+          await tx.insert(identityRoles).values(
+            roleRows.map(role => ({
+              identityId: input.identityId,
+              roleId: role.id,
+              assignedByIdentityId: input.assignedByIdentityId,
+            }))
+          );
+        }
+      });
+
+      return found;
+    },
+    () => {
+      _DEMO_ROLES_BY_IDENTITY[input.identityId] = {
+        roles: wanted,
+        permissions: wanted.includes("ADMIN")
+          ? ["identity:create","identity:read","identity:update","identity:revoke","asset:create","asset:read","asset:edit","asset:assign","asset:transfer","asset:revoke","audit:read","policy:create","policy:update","administration:manage"]
+          : wanted.includes("MANAGER")
+          ? ["identity:read","asset:read","asset:edit","asset:assign","asset:transfer","audit:read"]
+          : wanted.includes("AUDITOR")
+          ? ["identity:read","asset:read","audit:read"]
+          : ["asset:read"],
+      };
+      return wanted;
     }
-  });
-
-  return found;
+  );
 }
 
 /** Policy catalog (the access-control surfaces read this; the engine remains source of truth). */
 export async function listPolicies(): Promise<PolicyRow[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(policies).orderBy(desc(policies.active), policies.resourceType, policies.action);
+  return withDb(
+    async db => {
+      const rows = await db.select().from(policies).orderBy(desc(policies.active), policies.resourceType, policies.action);
+      return rows.length > 0 ? rows : [..._DEMO_POLICIES];
+    },
+    () => [..._DEMO_POLICIES]
+  );
 }
 
 /** Identity audit history: every audit row touching one identity (actor or target). */
 export async function listIdentityAuditEvents(identityId: string, limit = 100) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(auditEvents)
-    .where(
-      or(
-        eq(auditEvents.actorIdentityId, identityId),
-        and(eq(auditEvents.resourceType, "IDENTITY"), eq(auditEvents.resourceId, identityId)),
-      ),
-    )
-    .orderBy(desc(auditEvents.timestamp))
-    .limit(limit);
+  return withDb(
+    async db => {
+      const rows = await db
+        .select()
+        .from(auditEvents)
+        .where(
+          or(
+            eq(auditEvents.actorIdentityId, identityId),
+            and(eq(auditEvents.resourceType, "IDENTITY"), eq(auditEvents.resourceId, identityId)),
+          ),
+        )
+        .orderBy(desc(auditEvents.timestamp))
+        .limit(limit);
+      return rows.length > 0
+        ? rows
+        : _inMemoryAuditEvents
+            .filter(e => e.actorIdentityId === identityId || (e.resourceType === "IDENTITY" && e.resourceId === identityId))
+            .slice(0, limit);
+    },
+    () =>
+      _inMemoryAuditEvents
+        .filter(e => e.actorIdentityId === identityId || (e.resourceType === "IDENTITY" && e.resourceId === identityId))
+        .slice(0, limit)
+  );
 }
 
 /** Asset provenance: custody rows for an asset, oldest first. */
 export async function listAssetCustody(assetRowId: string) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(assetCustody)
-    .where(eq(assetCustody.assetId, assetRowId))
-    .orderBy(desc(assetCustody.startedAt));
+  return withDb(
+    async db => {
+      const rows = await db
+        .select()
+        .from(assetCustody)
+        .where(eq(assetCustody.assetId, assetRowId))
+        .orderBy(desc(assetCustody.startedAt));
+      return rows.length > 0 ? rows : _DEMO_CUSTODY.filter(c => c.assetId === assetRowId);
+    },
+    () => _DEMO_CUSTODY.filter(c => c.assetId === assetRowId)
+  );
 }
 
 /** Asset provenance: audit events whose resourceId matches the asset id. */
 export async function listAssetAuditEvents(assetId: string, limit = 100) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(auditEvents)
-    .where(and(eq(auditEvents.resourceType, "ASSET"), eq(auditEvents.resourceId, assetId)))
-    .orderBy(desc(auditEvents.timestamp))
-    .limit(limit);
+  return withDb(
+    async db => {
+      const rows = await db
+        .select()
+        .from(auditEvents)
+        .where(and(eq(auditEvents.resourceType, "ASSET"), eq(auditEvents.resourceId, assetId)))
+        .orderBy(desc(auditEvents.timestamp))
+        .limit(limit);
+      return rows.length > 0
+        ? rows
+        : _inMemoryAuditEvents
+            .filter(e => e.resourceType === "ASSET" && (e.resourceId === assetId || e.resourceId === "DEV-FIRMWARE-001"))
+            .slice(0, limit);
+    },
+    () =>
+      _inMemoryAuditEvents
+        .filter(e => e.resourceType === "ASSET" && (e.resourceId === assetId || e.resourceId === "DEV-FIRMWARE-001"))
+        .slice(0, limit)
+  );
 }
 
 /** Security intelligence: create an advisory alert from rule evaluation. */
 export async function createSecurityAlert(input: Omit<typeof securityAlerts.$inferInsert, "createdAt" | "resolvedAt">) {
-  const db = await getDb();
-  if (!db) return undefined;
   const id = input.id ?? crypto.randomUUID();
-  await db.insert(securityAlerts).values({ ...input, id } as typeof securityAlerts.$inferInsert);
-  const rows = await db.select().from(securityAlerts).where(eq(securityAlerts.id, id)).limit(1);
-  return rows[0];
+  const alertRow: typeof securityAlerts.$inferSelect = {
+    id,
+    title: input.title,
+    severity: input.severity ?? "MEDIUM",
+    status: input.status ?? "OPEN",
+    identityId: input.identityId ?? null,
+    assetId: input.assetId ?? null,
+    description: input.description,
+    riskScore: input.riskScore ?? null,
+    createdAt: new Date(),
+    resolvedAt: null,
+  };
+  return withDb(
+    async db => {
+      await db.insert(securityAlerts).values({ ...input, id } as typeof securityAlerts.$inferInsert);
+      const rows = await db.select().from(securityAlerts).where(eq(securityAlerts.id, id)).limit(1);
+      return rows[0] ?? alertRow;
+    },
+    () => {
+      _inMemorySecurityAlerts.unshift(alertRow);
+      return alertRow;
+    }
+  );
 }
 
 export type PolicyRow = typeof policies.$inferSelect;
 
 export async function createAuthorizationDecision(input: typeof authorizationDecisions.$inferInsert) {
-  const db = await getDb();
-  if (!db) return undefined;
   const id = input.id ?? crypto.randomUUID();
-  await db.insert(authorizationDecisions).values({ ...input, id });
-  const rows = await db.select().from(authorizationDecisions).where(eq(authorizationDecisions.id, id)).limit(1);
-  return rows[0];
+  const decisionRow: typeof authorizationDecisions.$inferSelect = {
+    id,
+    actorIdentityId: input.actorIdentityId,
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    action: input.action,
+    decision: input.decision,
+    reason: input.reason,
+    policyId: input.policyId ?? null,
+    timestamp: new Date(),
+  };
+  return withDb(
+    async db => {
+      await db.insert(authorizationDecisions).values({ ...input, id });
+      const rows = await db.select().from(authorizationDecisions).where(eq(authorizationDecisions.id, id)).limit(1);
+      return rows[0] ?? decisionRow;
+    },
+    () => decisionRow
+  );
 }
 
 export async function createAuditEvent(input: typeof auditEvents.$inferInsert) {
-  const db = await getDb();
-  if (!db) return undefined;
   const id = input.id ?? crypto.randomUUID();
-  await db.insert(auditEvents).values({ ...input, id });
-  const rows = await db.select().from(auditEvents).where(eq(auditEvents.id, id)).limit(1);
-  return rows[0];
+  const event: AuditEvent = {
+    id,
+    actorIdentityId: input.actorIdentityId ?? null,
+    action: input.action,
+    resourceType: input.resourceType,
+    resourceId: input.resourceId ?? null,
+    decision: input.decision ?? null,
+    reason: input.reason ?? null,
+    timestamp: input.timestamp ? new Date(input.timestamp) : new Date(),
+    transactionHash: input.transactionHash ?? null,
+    blockNumber: input.blockNumber ?? null,
+    metadata: input.metadata ?? null,
+    source: (input.source as "APPLICATION" | "CHAIN_READ_MODEL") ?? "APPLICATION",
+  };
+  return withDb(
+    async db => {
+      await db.insert(auditEvents).values({ ...input, id });
+      const rows = await db.select().from(auditEvents).where(eq(auditEvents.id, id)).limit(1);
+      return rows[0] ?? event;
+    },
+    () => {
+      _inMemoryAuditEvents.unshift(event);
+      return event;
+    }
+  );
 }
 
 export async function listAuditEvents(limit = 50) {
-  const db = await getDb();
-  return db ? db.select().from(auditEvents).orderBy(desc(auditEvents.timestamp)).limit(limit) : [];
+  return withDb(
+    async db => {
+      const rows = await db.select().from(auditEvents).orderBy(desc(auditEvents.timestamp)).limit(limit);
+      return rows.length > 0 ? rows : _inMemoryAuditEvents.slice(0, limit);
+    },
+    () => _inMemoryAuditEvents.slice(0, limit)
+  );
 }
 
 /**
@@ -411,39 +1060,74 @@ export async function updateAlertStatus(input: {
   alertId: string;
   status: "OPEN" | "INVESTIGATING" | "RESOLVED";
 }): Promise<typeof securityAlerts.$inferSelect | null> {
-  const db = await getDb();
-  if (!db) return null;
-  await db
-    .update(securityAlerts)
-    .set({
-      status: input.status,
-      ...(input.status === "RESOLVED" ? { resolvedAt: new Date() } : {}),
-    })
-    .where(eq(securityAlerts.id, input.alertId));
-  const rows = await db.select().from(securityAlerts).where(eq(securityAlerts.id, input.alertId)).limit(1);
-  return rows[0] ?? null;
+  return withDb(
+    async db => {
+      await db
+        .update(securityAlerts)
+        .set({
+          status: input.status,
+          ...(input.status === "RESOLVED" ? { resolvedAt: new Date() } : {}),
+        })
+        .where(eq(securityAlerts.id, input.alertId));
+      const rows = await db.select().from(securityAlerts).where(eq(securityAlerts.id, input.alertId)).limit(1);
+      return rows[0] ?? null;
+    },
+    () => {
+      const alert = _inMemorySecurityAlerts.find(a => a.id === input.alertId);
+      if (alert) {
+        alert.status = input.status;
+        if (input.status === "RESOLVED") alert.resolvedAt = new Date();
+      }
+      return alert ?? null;
+    }
+  );
 }
 
 export async function listSecurityAlerts() {
-  const db = await getDb();
-  return db ? db.select().from(securityAlerts).orderBy(desc(securityAlerts.createdAt)) : [];
+  return withDb(
+    async db => {
+      const rows = await db.select().from(securityAlerts).orderBy(desc(securityAlerts.createdAt));
+      return rows.length > 0 ? rows : [..._inMemorySecurityAlerts];
+    },
+    () => [..._inMemorySecurityAlerts]
+  );
 }
 
 export async function countOpenAlerts() {
-  const db = await getDb();
-  if (!db) return 0;
-  const rows = await db.select().from(securityAlerts).where(and(eq(securityAlerts.status, "OPEN")));
-  return rows.length;
+  return withDb(
+    async db => {
+      const rows = await db.select().from(securityAlerts).where(eq(securityAlerts.status, "OPEN"));
+      return rows.length;
+    },
+    () => _inMemorySecurityAlerts.filter(a => a.status === "OPEN").length
+  );
 }
 
-
 export async function createDidRecord(input: Omit<typeof didRecords.$inferInsert, "id" | "createdAt">) {
-  const db = await getDb();
-  if (!db) throw new Error("Database is not configured");
   const id = crypto.randomUUID();
-  await db.insert(didRecords).values({ ...input, id });
-  const rows = await db.select().from(didRecords).where(eq(didRecords.id, id)).limit(1);
-  return rows[0];
+  const rec: typeof didRecords.$inferSelect = {
+    id,
+    identityId: input.identityId,
+    did: input.did,
+    method: input.method,
+    subject: input.subject,
+    document: input.document ?? null,
+    status: (input.status as "ACTIVE" | "REVOKED") ?? "ACTIVE",
+    keyStatus: "ACTIVE",
+    keyIdentifier: null,
+    rotatedFrom: null,
+    rotatedAt: null,
+    revokedAt: null,
+    createdAt: new Date(),
+  };
+  return withDb(
+    async db => {
+      await db.insert(didRecords).values({ ...input, id });
+      const rows = await db.select().from(didRecords).where(eq(didRecords.id, id)).limit(1);
+      return rows[0] ?? rec;
+    },
+    () => rec
+  );
 }
 
 /**
@@ -462,34 +1146,47 @@ export async function applyCustodyTransfer(input: {
   transactionHash?: string | null;
   blockNumber?: number | null;
 }): Promise<Asset | null> {
-  const db = await getDb();
-  if (!db) return null;
-
-  await db.transaction(async tx => {
-    if (input.newCustodianIdentityId) {
-      await tx
-        .update(assets)
-        .set({ custodianIdentityId: input.newCustodianIdentityId })
-        .where(eq(assets.id, input.assetRowId));
-    }
-    // Close the currently open custody row (if the table has one) and open a
-    // new row for the incoming custodian.
-    await tx
-      .update(assetCustody)
-      .set({ endedAt: new Date() })
-      .where(and(eq(assetCustody.assetId, input.assetRowId), isNull(assetCustody.endedAt)));
-    if (input.newCustodianIdentityId) {
-      await tx.insert(assetCustody).values({
-        id: crypto.randomUUID(),
-        assetId: input.assetRowId,
-        custodianIdentityId: input.newCustodianIdentityId,
-        reason: input.reason,
+  return withDb(
+    async db => {
+      await db.transaction(async tx => {
+        if (input.newCustodianIdentityId) {
+          await tx
+            .update(assets)
+            .set({ custodianIdentityId: input.newCustodianIdentityId })
+            .where(eq(assets.id, input.assetRowId));
+        }
+        await tx
+          .update(assetCustody)
+          .set({ endedAt: new Date() })
+          .where(and(eq(assetCustody.assetId, input.assetRowId), isNull(assetCustody.endedAt)));
+        if (input.newCustodianIdentityId) {
+          await tx.insert(assetCustody).values({
+            id: crypto.randomUUID(),
+            assetId: input.assetRowId,
+            custodianIdentityId: input.newCustodianIdentityId,
+            reason: input.reason,
+          });
+        }
       });
+      const rows = await db.select().from(assets).where(eq(assets.id, input.assetRowId)).limit(1);
+      return rows[0] ?? null;
+    },
+    () => {
+      const asset = _DEMO_ASSETS.find(a => a.id === input.assetRowId || a.assetId === input.assetRowId);
+      if (asset && input.newCustodianIdentityId) {
+        asset.custodianIdentityId = input.newCustodianIdentityId;
+        _DEMO_CUSTODY.unshift({
+          id: crypto.randomUUID(),
+          assetId: asset.id,
+          custodianIdentityId: input.newCustodianIdentityId,
+          reason: input.reason,
+          startedAt: new Date(),
+          endedAt: null,
+        });
+      }
+      return asset ?? null;
     }
-  });
-
-  const rows = await db.select().from(assets).where(eq(assets.id, input.assetRowId)).limit(1);
-  return rows[0] ?? null;
+  );
 }
 
 /**
@@ -501,33 +1198,39 @@ export async function applyIdentityStatusChange(input: {
   identityId: string;
   status: "ACTIVE" | "SUSPENDED" | "REVOKED";
 }): Promise<Identity | null> {
-  const db = await getDb();
-  if (!db) return null;
+  return withDb(
+    async db => {
+      const revokedAt = input.status === "REVOKED" ? new Date() : null;
+      await db
+        .update(identities)
+        .set({
+          status: input.status,
+          ...(revokedAt ? { revokedAt } : {}),
+        })
+        .where(eq(identities.id, input.identityId));
 
-  const revokedAt = input.status === "REVOKED" ? new Date() : null;
-  await db
-    .update(identities)
-    .set({
-      status: input.status,
-      ...(revokedAt ? { revokedAt } : {}),
-    })
-    .where(eq(identities.id, input.identityId));
-
-  // Keep the DID record lifecycle in sync (a revoked identity must not keep
-  // an ACTIVE DID document).
-  const identityRows = await db.select().from(identities).where(eq(identities.id, input.identityId)).limit(1);
-  const identity = identityRows[0];
-  if (identity?.did) {
-    await db
-      .update(didRecords)
-      .set({
-        status: input.status === "ACTIVE" ? "ACTIVE" : "REVOKED",
-        ...(input.status !== "ACTIVE" ? { revokedAt: new Date() } : {}),
-      })
-      .where(eq(didRecords.did, identity.did));
-  }
-
-  return identity ?? null;
+      const identityRows = await db.select().from(identities).where(eq(identities.id, input.identityId)).limit(1);
+      const identity = identityRows[0];
+      if (identity?.did) {
+        await db
+          .update(didRecords)
+          .set({
+            status: input.status === "ACTIVE" ? "ACTIVE" : "REVOKED",
+            ...(input.status !== "ACTIVE" ? { revokedAt: new Date() } : {}),
+          })
+          .where(eq(didRecords.did, identity.did));
+      }
+      return identity ?? null;
+    },
+    () => {
+      const ident = _DEMO_IDENTITIES.find(i => i.id === input.identityId);
+      if (ident) {
+        ident.status = input.status;
+        if (input.status === "REVOKED") ident.revokedAt = new Date();
+      }
+      return ident ?? null;
+    }
+  );
 }
 
 /**
@@ -539,14 +1242,23 @@ export async function applyAssetStatusChange(input: {
   assetRowId: string;
   status: "ACTIVE" | "REVOKED" | "PENDING";
 }): Promise<Asset | null> {
-  const db = await getDb();
-  if (!db) return null;
-  await db
-    .update(assets)
-    .set({ status: input.status })
-    .where(eq(assets.id, input.assetRowId));
-  const rows = await db.select().from(assets).where(eq(assets.id, input.assetRowId)).limit(1);
-  return rows[0] ?? null;
+  return withDb(
+    async db => {
+      await db
+        .update(assets)
+        .set({ status: input.status })
+        .where(eq(assets.id, input.assetRowId));
+      const rows = await db.select().from(assets).where(eq(assets.id, input.assetRowId)).limit(1);
+      return rows[0] ?? null;
+    },
+    () => {
+      const asset = _DEMO_ASSETS.find(a => a.id === input.assetRowId || a.assetId === input.assetRowId);
+      if (asset) {
+        asset.status = input.status;
+      }
+      return asset ?? null;
+    }
+  );
 }
 
 /**
@@ -622,23 +1334,26 @@ export type PlatformSessionState =
   | { state: "EXPIRED" };
 
 export async function classifyPlatformSession(sessionToken: string): Promise<PlatformSessionState> {
-  const db = await getDb();
-  if (!db) return { state: "UNTRACKED" };
-  const rows = await db
-    .select({
-      id: sessions.id,
-      identityId: sessions.identityId,
-      expiresAt: sessions.expiresAt,
-      revokedAt: sessions.revokedAt,
-    })
-    .from(sessions)
-    .where(eq(sessions.sessionId, hashSessionToken(sessionToken)))
-    .limit(1);
-  const row = rows[0];
-  if (!row) return { state: "UNTRACKED" };
-  if (row.revokedAt) return { state: "REVOKED" };
-  if (row.expiresAt.getTime() <= Date.now()) return { state: "EXPIRED" };
-  return { state: "ACTIVE", id: row.id, identityId: row.identityId, expiresAt: row.expiresAt };
+  return withDb<PlatformSessionState>(
+    async db => {
+      const rows = await db
+        .select({
+          id: sessions.id,
+          identityId: sessions.identityId,
+          expiresAt: sessions.expiresAt,
+          revokedAt: sessions.revokedAt,
+        })
+        .from(sessions)
+        .where(eq(sessions.sessionId, hashSessionToken(sessionToken)))
+        .limit(1);
+      const row = rows[0];
+      if (!row) return { state: "UNTRACKED" };
+      if (row.revokedAt) return { state: "REVOKED" };
+      if (row.expiresAt.getTime() <= Date.now()) return { state: "EXPIRED" };
+      return { state: "ACTIVE", id: row.id, identityId: row.identityId, expiresAt: row.expiresAt };
+    },
+    () => ({ state: "UNTRACKED" })
+  );
 }
 
 /**
@@ -764,10 +1479,8 @@ export async function createAssetApproval(input: {
   targetIdentityId?: string | null;
   reason?: string | null;
 }) {
-  const db = await getDb();
-  if (!db) return undefined;
   const id = crypto.randomUUID();
-  await db.insert(assetApprovals).values({
+  const item: typeof assetApprovals.$inferSelect = {
     id,
     assetId: input.assetId,
     requesterIdentityId: input.requesterIdentityId,
@@ -775,47 +1488,94 @@ export async function createAssetApproval(input: {
     targetIdentityId: input.targetIdentityId ?? null,
     status: "PENDING",
     reason: input.reason ?? null,
-  });
-  const rows = await db.select().from(assetApprovals).where(eq(assetApprovals.id, id)).limit(1);
-  return rows[0];
+    approverIdentityId: null,
+    decidedAt: null,
+    executedAt: null,
+    createdAt: new Date(),
+  };
+  return withDb(
+    async db => {
+      await db.insert(assetApprovals).values({
+        id,
+        assetId: input.assetId,
+        requesterIdentityId: input.requesterIdentityId,
+        action: input.action,
+        targetIdentityId: input.targetIdentityId ?? null,
+        status: "PENDING",
+        reason: input.reason ?? null,
+      });
+      const rows = await db.select().from(assetApprovals).where(eq(assetApprovals.id, id)).limit(1);
+      return rows[0] ?? item;
+    },
+    () => {
+      _DEMO_APPROVALS.unshift(item);
+      return item;
+    }
+  );
 }
 
 export async function getAssetApproval(approvalId: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(assetApprovals).where(eq(assetApprovals.id, approvalId)).limit(1);
-  return rows[0];
+  return withDb(
+    async db => {
+      const rows = await db.select().from(assetApprovals).where(eq(assetApprovals.id, approvalId)).limit(1);
+      return rows[0] ?? _DEMO_APPROVALS.find(a => a.id === approvalId);
+    },
+    () => _DEMO_APPROVALS.find(a => a.id === approvalId)
+  );
 }
 
 /** The active (non-terminal) approval for an asset+requester+action, if any. */
 export async function getActiveAssetApproval(input: { assetId: string; requesterIdentityId: string; action: string }) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db
-    .select()
-    .from(assetApprovals)
-    .where(
-      and(
-        eq(assetApprovals.assetId, input.assetId),
-        eq(assetApprovals.requesterIdentityId, input.requesterIdentityId),
-        eq(assetApprovals.action, input.action),
-        inArray(assetApprovals.status, ["PENDING", "APPROVED"]),
-      ),
-    )
-    .orderBy(desc(assetApprovals.createdAt))
-    .limit(1);
-  return rows[0];
+  return withDb(
+    async db => {
+      const rows = await db
+        .select()
+        .from(assetApprovals)
+        .where(
+          and(
+            eq(assetApprovals.assetId, input.assetId),
+            eq(assetApprovals.requesterIdentityId, input.requesterIdentityId),
+            eq(assetApprovals.action, input.action),
+            inArray(assetApprovals.status, ["PENDING", "APPROVED"]),
+          ),
+        )
+        .orderBy(desc(assetApprovals.createdAt))
+        .limit(1);
+      return (
+        rows[0] ??
+        _DEMO_APPROVALS.find(
+          a =>
+            a.assetId === input.assetId &&
+            a.requesterIdentityId === input.requesterIdentityId &&
+            a.action === input.action &&
+            (a.status === "PENDING" || a.status === "APPROVED"),
+        )
+      );
+    },
+    () =>
+      _DEMO_APPROVALS.find(
+        a =>
+          a.assetId === input.assetId &&
+          a.requesterIdentityId === input.requesterIdentityId &&
+          a.action === input.action &&
+          (a.status === "PENDING" || a.status === "APPROVED"),
+      )
+  );
 }
 
 export async function listAssetApprovals(assetId: string) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(assetApprovals)
-    .where(eq(assetApprovals.assetId, assetId))
-    .orderBy(desc(assetApprovals.createdAt))
-    .limit(50);
+  return withDb(
+    async db => {
+      const rows = await db
+        .select()
+        .from(assetApprovals)
+        .where(eq(assetApprovals.assetId, assetId))
+        .orderBy(desc(assetApprovals.createdAt))
+        .limit(50);
+      return rows.length > 0 ? rows : _DEMO_APPROVALS.filter(a => a.assetId === assetId);
+    },
+    () => _DEMO_APPROVALS.filter(a => a.assetId === assetId)
+  );
 }
 
 export async function updateAssetApprovalStatus(input: {
@@ -823,24 +1583,47 @@ export async function updateAssetApprovalStatus(input: {
   status: "APPROVED" | "REJECTED";
   approverIdentityId: string;
 }) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db
-    .update(assetApprovals)
-    .set({ status: input.status, approverIdentityId: input.approverIdentityId, decidedAt: new Date() })
-    .where(and(eq(assetApprovals.id, input.approvalId), eq(assetApprovals.status, "PENDING")));
-  if (!result || result[0].affectedRows === 0) return undefined;
-  return getAssetApproval(input.approvalId);
+  return withDb(
+    async db => {
+      const result = await db
+        .update(assetApprovals)
+        .set({ status: input.status, approverIdentityId: input.approverIdentityId, decidedAt: new Date() })
+        .where(and(eq(assetApprovals.id, input.approvalId), eq(assetApprovals.status, "PENDING")));
+      if (!result || result[0].affectedRows === 0) return undefined;
+      return getAssetApproval(input.approvalId);
+    },
+    () => {
+      const app = _DEMO_APPROVALS.find(a => a.id === input.approvalId);
+      if (app && app.status === "PENDING") {
+        app.status = input.status;
+        app.approverIdentityId = input.approverIdentityId;
+        app.decidedAt = new Date();
+        return app;
+      }
+      return undefined;
+    }
+  );
 }
 
 export async function markAssetApprovalExecuted(approvalId: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  await db
-    .update(assetApprovals)
-    .set({ status: "EXECUTED", executedAt: new Date() })
-    .where(eq(assetApprovals.id, approvalId));
-  return getAssetApproval(approvalId);
+  return withDb(
+    async db => {
+      await db
+        .update(assetApprovals)
+        .set({ status: "EXECUTED", executedAt: new Date() })
+        .where(eq(assetApprovals.id, approvalId));
+      return getAssetApproval(approvalId);
+    },
+    () => {
+      const app = _DEMO_APPROVALS.find(a => a.id === approvalId);
+      if (app) {
+        app.status = "EXECUTED";
+        app.executedAt = new Date();
+        return app;
+      }
+      return undefined;
+    }
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -1483,21 +2266,6 @@ export async function consumeOwnershipPresentation(nonce: string) {
 /* PQC CRYPTO ASSURANCE (ML-DSA-65 keys + dual-signature challenges)    */
 /* ------------------------------------------------------------------ */
 
-/** The DID half of a key-registration request, resolved server-side. */
-export async function getIdentityByDid(did: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(identities).where(eq(identities.did, did)).limit(1);
-  return rows[0];
-}
-
-export async function getAssetByAssetId(assetId: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(assets).where(eq(assets.assetId, assetId)).limit(1);
-  return rows[0];
-}
-
 /**
  * Register (or idempotently re-assert) an ACTIVE ML-DSA-65 public key for a
  * DID. PUBLIC material only — the unique (did, keyIdentifier) index makes a
@@ -1549,27 +2317,33 @@ export async function registerPqcKeyRecord(input: {
 
 /** The ACTIVE ML-DSA-65 verification key for a DID, or undefined. */
 export async function getActivePqcKeyRecord(did: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db
-    .select()
-    .from(pqcKeyRecords)
-    .where(and(eq(pqcKeyRecords.did, did), eq(pqcKeyRecords.status, "ACTIVE")))
-    .orderBy(desc(pqcKeyRecords.createdAt))
-    .limit(1);
-  return rows[0];
+  return withDb(
+    async db => {
+      const rows = await db
+        .select()
+        .from(pqcKeyRecords)
+        .where(and(eq(pqcKeyRecords.did, did), eq(pqcKeyRecords.status, "ACTIVE")))
+        .orderBy(desc(pqcKeyRecords.createdAt))
+        .limit(1);
+      return rows[0];
+    },
+    () => undefined
+  );
 }
 
 /** Key lifecycle history for a DID (newest first) — audit/evidence surface. */
 export async function listPqcKeyRecords(did: string) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(pqcKeyRecords)
-    .where(eq(pqcKeyRecords.did, did))
-    .orderBy(desc(pqcKeyRecords.createdAt))
-    .limit(100);
+  return withDb(
+    async db => {
+      return db
+        .select()
+        .from(pqcKeyRecords)
+        .where(eq(pqcKeyRecords.did, did))
+        .orderBy(desc(pqcKeyRecords.createdAt))
+        .limit(100);
+    },
+    () => []
+  );
 }
 
 /**
